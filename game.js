@@ -50,16 +50,24 @@ const GAP_INTERVAL = 5;
 let player, graphics, scoreText, speedText, comboText;
 let tracks = [], segments = [], obstacles = [], powerups = [];
 let currentTrack = Math.floor(NUM_TRACKS / 2);
-let score = 0, combo = 0, speed = 1.5, baseSpeed = 1.5;
+let score = 0, combo = 0, speed = 1.5, baseSpeed = 3.5;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
+let bgScrollOffset = 0; // Smooth background scrolling
 let titleText, instructText, startPrompt;
+let sceneRef = null;
+let inputTexts = {};
+let countdownText = null;
+let countdownTimer = 0;
+let gameActive = false;
+let firstSegmentX = null;
 let lastSegmentX = 0, segmentCounter = 0;
+let lastGapTracks = []; // Track which tracks had gaps in the last segment
 let boostTimer = 0, boostActive = false;
 let particles = [];
 let playerFalling = false;
 let playerVY = 0;
-let maxSpeed = 1.5;
+let maxSpeed = 20.5;
 let highScores = [];
 let enteringName = false;
 let playerName = ['A', 'A', 'A'];
@@ -72,6 +80,7 @@ let nameCursor = null;
 // =============================================================================
 function create() {
   const scene = this;
+  sceneRef = scene;
   graphics = this.add.graphics();
   
   // Initialize tracks (3 horizontal lanes)
@@ -166,6 +175,11 @@ function create() {
     spawnSegment();
   }
   
+  // Track the first segment position for input circles
+  if (segments.length > 0) {
+    firstSegmentX = segments[0].x;
+  }
+  
   // Input
   scene.input.keyboard.on('keydown', (e) => {
     const k = KEYBOARD_TO_ARCADE[e.key] || e.key;
@@ -209,7 +223,7 @@ function create() {
       return;
     }
     
-    if (gameOver) return;
+    if (gameOver || !gameActive) return;
     
     if (k === 'P1U' && currentTrack > 0 && !playerFalling) {
       currentTrack--;
@@ -220,8 +234,10 @@ function create() {
       player.targetY = tracks[currentTrack].y;
       playTone(scene, 660, 0.05);
     } else if (k === 'P1A' && !playerFalling) {
-      // Boost jump
-      player.x += 80;
+      // Boost jump with upward velocity
+      playerVX = -80;
+      playerFalling = true;
+      playerVY = -250; // Upward jump velocity
       createParticles(player.x - 40, player.y, '#ffff00', 12);
       playTone(scene, 880, 0.08);
     }
@@ -236,12 +252,62 @@ function create() {
 function update(_time, delta) {
   const dt = delta / 1000;
   
+  // Update background scroll (smooth continuous scrolling)
+  bgScrollOffset += speed * dt * 100;
+  
   // Update grid animation
   gridOffset += speed * 2;
   if (gridOffset > 40) gridOffset = 0;
   
   if (!gameStarted) {
     drawTitleScreen();
+    return;
+  }
+  
+  // Handle countdown
+  if (!gameActive && countdownTimer > 0) {
+    const prevTime = countdownTimer;
+    countdownTimer -= dt;
+    
+    if (countdownText) {
+      let displayText = '';
+      let showGo = false;
+      
+      if (countdownTimer > 0.75) {
+        displayText = '3';
+      } else if (countdownTimer > 0.5) {
+        displayText = '2';
+      } else if (countdownTimer > 0.25) {
+        displayText = '1';
+      } else if (countdownTimer > 0) {
+        displayText = 'GO!';
+        showGo = true;
+      } else {
+        countdownText.setVisible(false);
+        gameActive = true;
+        if (countdownText) {
+          countdownText.destroy();
+          countdownText = null;
+        }
+        drawGame();
+        return;
+      }
+      
+      const prevText = countdownText.text;
+      countdownText.setText(displayText);
+      countdownText.setVisible(true);
+      
+      // Play sound when count changes
+      if (displayText !== prevText) {
+        if (showGo) {
+          playTone(this, 880, 0.2);
+        } else {
+          playTone(this, 440 + (3 - parseInt(displayText)) * 110, 0.15);
+        }
+      }
+    }
+    
+    drawGame();
     return;
   }
   
@@ -257,6 +323,8 @@ function update(_time, delta) {
     if (boostTimer <= 0) {
       boostActive = false;
       speed = baseSpeed;
+
+      boostActive = false;
       speedText.setColor('#ffaa00');
     }
   }
@@ -266,19 +334,20 @@ function update(_time, delta) {
     playerVY += dt * 400; // Gravity
     player.y += playerVY * dt;
     
-    // Check if landed on a track below
+    // Check if landed on a segment (check X position first, then Y)
     let landed = false;
     for (let i = 0; i < tracks.length; i++) {
-      if (Math.abs(player.y - tracks[i].y) < 20) {
-        // Check if there's a segment at this position
-        const onSegment = segments.some(seg => 
-          seg.track === i && 
-          player.x >= seg.x && 
-          player.x <= seg.x + seg.width &&
-          seg.type !== 'gap'
-        );
-        
-        if (onSegment) {
+      // Check if there's a segment at this X position
+      const onSegment = segments.some(seg => 
+        seg.track === i && 
+        player.x >= seg.x && 
+        player.x <= seg.x + seg.width &&
+        seg.type !== 'gap'
+      );
+      
+      if (onSegment) {
+        // Check if player is descending and near the track Y
+        if (playerVY >= 0 && Math.abs(player.y - tracks[i].y) < 30) {
           player.y = tracks[i].y;
           player.targetY = tracks[i].y;
           currentTrack = i;
@@ -307,90 +376,101 @@ function update(_time, delta) {
   
   player.glowPhase += dt * 5;
   
-  // Move segments
-  segments.forEach(seg => {
-    seg.x -= speed;
-  });
-  
-  obstacles.forEach(obs => {
-    obs.x -= speed;
-  });
-  
-  powerups.forEach(pow => {
-    pow.x -= speed;
-    pow.angle += dt * 3;
-  });
-  
-  // Check if player is on a gap and not jumping
-  if (!playerFalling) {
-    const currentSegments = segments.filter(seg => 
-      seg.track === currentTrack &&
-      player.x >= seg.x && 
-      player.x <= seg.x + seg.width
-    );
-    
-    const onGap = currentSegments.length === 0 || currentSegments.some(seg => seg.type === 'gap');
-    
-    if (onGap) {
-      playerFalling = true;
-      playerVY = 0;
-    }
+  // Move segments (only if game is active)
+  if (gameActive) {
+    segments.forEach(seg => {
+      seg.x -= speed;
+    });
   }
   
-  // Remove off-screen elements
-  segments = segments.filter(s => s.x > -SEGMENT_WIDTH);
-  obstacles = obstacles.filter(o => o.x > -50);
-  powerups = powerups.filter(p => p.x > -50);
-  
-  // Spawn new segments
-  if (segments.length === 0 || segments[segments.length - 1].x < 1000) {
-    spawnSegment();
+  if (gameActive) {
+    obstacles.forEach(obs => {
+      obs.x -= speed;
+    });
+    
+    powerups.forEach(pow => {
+      pow.x -= speed;
+      pow.angle += dt * 3;
+    });
   }
   
-  // Check collisions with obstacles
-  obstacles.forEach(obs => {
-    const dx = obs.x - player.x;
-    const dy = obs.y - player.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist < player.size + obs.size) {
-      endGame(this);
-      createExplosion(player.x, player.y);
+  if (gameActive) {
+    // Check if player is on a gap and not jumping
+    if (!playerFalling) {
+      const currentSegments = segments.filter(seg => 
+        seg.track === currentTrack &&
+        player.x >= seg.x && 
+        player.x <= seg.x + seg.width
+      );
+      
+      const onGap = currentSegments.length === 0 || currentSegments.some(seg => seg.type === 'gap');
+      
+      if (onGap) {
+        playerFalling = true;
+        playerVY = 0;
+      }
     }
-  });
-  
-  // Check powerup collection
-  powerups = powerups.filter(pow => {
-    const dx = pow.x - player.x;
-    const dy = pow.y - player.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
     
-    if (dist < player.size + 15) {
-      collectPowerup(pow, this);
-      return false;
+    // Remove off-screen elements
+    segments = segments.filter(s => s.x > -SEGMENT_WIDTH);
+    obstacles = obstacles.filter(o => o.x > -50);
+    powerups = powerups.filter(p => p.x > -50);
+    
+    // Spawn new segments - find the rightmost segment position
+    let rightmostX = 0;
+    if (segments.length > 0) {
+      rightmostX = Math.max(...segments.map(s => s.x + s.width));
     }
-    return true;
-  });
+    
+    if (segments.length === 0 || rightmostX < 1000) {
+      spawnSegment();
+    }
+    
+    // Check collisions with obstacles
+    obstacles.forEach(obs => {
+      const dx = obs.x - player.x;
+      const dy = obs.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < player.size + obs.size) {
+        endGame(this);
+        createExplosion(player.x, player.y);
+      }
+    });
+    
+    // Check powerup collection
+    powerups = powerups.filter(pow => {
+      const dx = pow.x - player.x;
+      const dy = pow.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < player.size + 15) {
+        collectPowerup(pow, this);
+        return false;
+      }
+      return true;
+    });
+    
+    // Update score
+    score += Math.floor(speed * dt * 8);
+    scoreText.setText('SCORE: ' + score);
+    speedText.setText('SPEED: ' + speed.toFixed(1) + 'x');
+    
+    if (combo > 0) {
+      comboText.setText('COMBO x' + combo);
+    } else {
+      comboText.setText('');
+    }
+    
+    // Increase difficulty
+    if (score % 600 < 10 && baseSpeed < 8) {
+      baseSpeed += 0.005;
+      if (!boostActive) speed = baseSpeed;
+    }
+  }
   
   // Update particles
   updateParticles(dt);
-  
-  // Update score
-  score += Math.floor(speed * dt * 8);
-  scoreText.setText('SCORE: ' + score);
-  speedText.setText('SPEED: ' + speed.toFixed(1) + 'x');
-  
-  if (combo > 0) {
-    comboText.setText('COMBO x' + combo);
-  } else {
-    comboText.setText('');
-  }
-  
-  // Increase difficulty
-  if (score % 600 < 10 && baseSpeed < 4) {
-    baseSpeed += 0.08;
-    if (!boostActive) speed = baseSpeed;
-  }
   
   drawGame();
 }
@@ -399,14 +479,43 @@ function update(_time, delta) {
 // SEGMENT GENERATION
 // =============================================================================
 function spawnSegment() {
-  const x = lastSegmentX + SEGMENT_WIDTH;
+  // Calculate next segment position based on actual rightmost segment
+  let x;
+  if (segments.length === 0) {
+    x = lastSegmentX + SEGMENT_WIDTH;
+  } else {
+    const rightmostX = Math.max(...segments.map(s => s.x + s.width));
+    x = rightmostX;
+  }
   lastSegmentX = x;
   segmentCounter++;
   
+  // Determine which tracks can have gaps (exclude tracks that had gaps last time)
+  const availableForGap = [];
+  for (let i = 0; i < NUM_TRACKS; i++) {
+    if (!lastGapTracks.includes(i)) {
+      availableForGap.push(i);
+    }
+  }
+  
+  // Decide if we should create gaps (only every GAP_INTERVAL segments)
+  const shouldCreateGaps = segmentCounter % GAP_INTERVAL === 0 && availableForGap.length > 0;
+  const currentGapTracks = [];
+  
+  if (shouldCreateGaps && Math.random() > 0.4) {
+    // Create 1-2 gaps, but never all tracks
+    const numGaps = Math.min(availableForGap.length, Math.floor(NUM_TRACKS / 2) + Math.floor(Math.random() * 2));
+    
+    // Shuffle and pick random tracks for gaps
+    const shuffled = [...availableForGap].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < numGaps; i++) {
+      currentGapTracks.push(shuffled[i]);
+    }
+  }
+  
   // Create segment on each track
   for (let i = 0; i < NUM_TRACKS; i++) {
-    // Most segments are plain, some are gaps
-    const isGap = segmentCounter % GAP_INTERVAL === 0 && Math.random() > 0.6;
+    const isGap = currentGapTracks.includes(i);
     
     const seg = {
       x: x,
@@ -418,6 +527,9 @@ function spawnSegment() {
     
     segments.push(seg);
   }
+  
+  // Update tracking for next segment
+  lastGapTracks = currentGapTracks;
   
   // Spawn obstacles (explosions) rarely
   if (Math.random() > 0.8) {
@@ -500,36 +612,79 @@ function updateParticles(dt) {
 }
 
 // =============================================================================
+// CIRCUIT BOARD BACKGROUND
+// =============================================================================
+function drawCircuitBoard(g, offset) {
+  // Dark PCB green background
+  g.fillStyle(0x2a4a2a, 1);
+  g.fillRect(0, 0, 800, 600);
+  
+  // Calculate horizontal offsets for smooth scrolling
+  const traceOffsetX = offset % 60;
+  const chipOffsetX = offset % 150;
+  
+  // Circuit traces (horizontal and vertical lines)
+  g.lineStyle(2, 0x7a9a5a, 0.8);
+  for (let y = 0; y < 600; y += 80) {
+    g.lineBetween(0, y, 800, y);
+    g.lineBetween(0, y + 20, 800, y + 20);
+  }
+  // Vertical traces scroll left
+  for (let x = -traceOffsetX; x < 850; x += 60) {
+    g.lineBetween(x, 0, x, 600);
+  }
+  
+  // Add chips and components (scroll left)
+  for (let y = 20; y < 600; y += 160) {
+    for (let x = 50 - chipOffsetX; x < 900; x += 150) {
+      // IC chip
+      g.fillStyle(0x1a1a1a, 1);
+      g.fillRect(x - 20, y - 15, 40, 30);
+      g.lineStyle(1, 0x4a4a4a, 1);
+      g.strokeRect(x - 20, y - 15, 40, 30);
+      
+      // Pins
+      g.fillStyle(0x8a8a8a, 1);
+      for (let i = 0; i < 6; i++) {
+        g.fillRect(x - 25, y - 12 + i * 5, 5, 2);
+        g.fillRect(x + 20, y - 12 + i * 5, 5, 2);
+      }
+    }
+  }
+  
+  // Capacitors and resistors (scroll left)
+  for (let y = 100; y < 600; y += 160) {
+    for (let x = 120 - chipOffsetX; x < 900; x += 150) {
+      // Capacitor
+      g.fillStyle(0x3a3a1a, 1);
+      g.fillCircle(x, y, 8);
+      g.lineStyle(1, 0x8a8a4a, 1);
+      g.strokeCircle(x, y, 8);
+    }
+  }
+  
+  // Solder pads (scroll left)
+  g.fillStyle(0xaa8844, 0.6);
+  for (let y = 10; y < 600; y += 80) {
+    for (let x = 30 - traceOffsetX; x < 850; x += 60) {
+      g.fillCircle(x, y, 3);
+    }
+  }
+}
+
+// =============================================================================
 // DRAWING
 // =============================================================================
 function drawTitleScreen() {
   graphics.clear();
-  
-  // Draw only grid background
-  graphics.lineStyle(1, 0x0066ff, 0.3);
-  // "glitched effect vertical"
-  for (let x = 0; x < 800; x += 40) {
-    const ox = (x - gridOffset) % 40;
-    if (ox >= 0) graphics.lineBetween(ox, 0, ox, 600);
-  }
-  for (let y = 0; y < 600; y += 40) {
-    graphics.lineBetween(0, y, 800, y);
-  }
+  drawCircuitBoard(graphics, bgScrollOffset);
 }
 
 function drawGame() {
   graphics.clear();
   
-  // Draw grid background (starting from x=0, not negative)
-  graphics.lineStyle(1, 0x0066ff, 0.3);
-  const tile = 40;
-  let startX = -((gridOffset % tile) + tile) % tile; // normalized into [0, tile)
-  for (let x = startX; x <= 800; x += tile) {
-    graphics.lineBetween(x, 0, x, 600);
-  }
-  for (let y = 0; y < 600; y += 40) {
-    graphics.lineBetween(0, y, 800, y);
-  }
+  // Draw circuit board background scrolling left
+  drawCircuitBoard(graphics, bgScrollOffset);
   
   // Draw circuit tracks with rounded cable style
   segments.forEach(seg => {
@@ -556,53 +711,87 @@ function drawGame() {
     }
   });
   
-  // Draw INPUT circles at the start of visible tracks
-  const leftmostSegments = {};
-  segments.forEach(seg => {
-    if (!leftmostSegments[seg.track] || seg.x < leftmostSegments[seg.track].x) {
-      if (seg.x < 100 && seg.x > -50) {
-        leftmostSegments[seg.track] = seg;
+  // Draw INPUT circles only on the first segment
+  if (firstSegmentX !== null) {
+    segments.forEach(seg => {
+      // Only show input circles on the first segment (within a small tolerance)
+      if (Math.abs(seg.x - firstSegmentX) < 10 && seg.x > -50 && seg.x < 100) {
+        // Circle
+        graphics.lineStyle(4, 0x00ffff, 1);
+        graphics.strokeCircle(seg.x, seg.y, 30);
+        graphics.fillStyle(0x001122, 1);
+        graphics.fillCircle(seg.x, seg.y, 26);
+        
+        // Create or update text for "input"
+        if (!inputTexts[seg.track]) {
+          inputTexts[seg.track] = sceneRef.add.text(seg.x, seg.y, 'input', {
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            color: '#00ffff',
+            stroke: '#001122',
+            strokeThickness: 2
+          }).setOrigin(0.5);
+        }
+        // Update position
+        inputTexts[seg.track].setPosition(seg.x, seg.y);
+        inputTexts[seg.track].setVisible(true);
+      } else if (inputTexts[seg.track]) {
+        // Hide text when not on first segment
+        inputTexts[seg.track].setVisible(false);
       }
-    }
-  });
+    });
+  }
   
-  Object.values(leftmostSegments).forEach(seg => {
-    // Circle
-    graphics.lineStyle(4, 0x00ffff, 1);
-    graphics.strokeCircle(seg.x, seg.y, 30);
-    graphics.fillStyle(0x001122, 1);
-    graphics.fillCircle(seg.x, seg.y, 26);
-  });
-  
-  // Draw obstacles (solid boom star explosions)
+  // Draw obstacles (pixel art explosions)
   obstacles.forEach(obs => {
     obs.pulse += 0.08;
+    const px = 5; // Pixel size for blocky look
+    const pulseScale = 0.8 + Math.sin(obs.pulse) * 0.2;
+    const s = obs.size * pulseScale;
+    const maxRad = Math.ceil(s);
     
-    // Solid red star explosion
-    graphics.fillStyle(0xff0000, 1);
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2 + obs.pulse;
-      const outerDist = obs.size * 1.2;
-      const innerDist = obs.size * 0.5;
-      
-      const x1 = obs.x + Math.cos(angle) * outerDist;
-      const y1 = obs.y + Math.sin(angle) * outerDist;
-      const x2 = obs.x + Math.cos(angle + Math.PI / 8) * innerDist;
-      const y2 = obs.y + Math.sin(angle + Math.PI / 8) * innerDist;
-      const x3 = obs.x + Math.cos(angle + Math.PI / 4) * outerDist;
-      const y3 = obs.y + Math.sin(angle + Math.PI / 4) * outerDist;
-      
-      graphics.fillTriangle(obs.x, obs.y, x1, y1, x2, y2);
-      graphics.fillTriangle(obs.x, obs.y, x2, y2, x3, y3);
+    // Outer red layer - circular fill
+    graphics.fillStyle(0xcc0000, 1);
+    const outerRad = s * 0.95;
+    for (let dy = -maxRad; dy <= maxRad; dy += px) {
+      for (let dx = -maxRad; dx <= maxRad; dx += px) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > outerRad * 0.7 && dist <= outerRad) {
+          const noise = Math.sin((dx + dy) * 0.5 + obs.pulse * 2) * 3;
+          if (dist + noise <= outerRad) {
+            graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
+          }
+        }
+      }
     }
     
-    // Yellow center
-    graphics.fillStyle(0xffff00, 1);
-    graphics.fillCircle(obs.x, obs.y, obs.size * 0.4);
+    // Middle orange layer - circular fill
+    graphics.fillStyle(0xff6600, 1);
+    const midRad = s * 0.65;
+    for (let dy = -maxRad; dy <= maxRad; dy += px) {
+      for (let dx = -maxRad; dx <= maxRad; dx += px) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > midRad * 0.5 && dist <= midRad) {
+          graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
+        }
+      }
+    }
     
-    // White hot center
+    // Inner yellow layer - circular fill
+    graphics.fillStyle(0xffff00, 1);
+    const innerRad = s * 0.4;
+    for (let dy = -maxRad; dy <= maxRad; dy += px) {
+      for (let dx = -maxRad; dx <= maxRad; dx += px) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= innerRad) {
+          graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
+        }
+      }
+    }
+    
+    // White hot center - 2x2 pixel block
     graphics.fillStyle(0xffffff, 1);
-    graphics.fillCircle(obs.x, obs.y, obs.size * 0.2);
+    graphics.fillRect(Math.floor(obs.x - px), Math.floor(obs.y - px), px * 2, px * 2);
   });
   
   // Draw powerups (lightning)
@@ -658,10 +847,6 @@ function drawGame() {
     graphics.fillCircle(p.x, p.y, p.size * alpha);
   });
   
-  // Draw INPUT text on circles
-  Object.values(leftmostSegments).forEach(seg => {
-    graphics.fillStyle(0x00ffff, 1);
-  });
 }
 
 // =============================================================================
@@ -669,13 +854,25 @@ function drawGame() {
 // =============================================================================
 function startGame(scene) {
   gameStarted = true;
+  gameActive = false;
   titleText.destroy();
   instructText.destroy();
   startPrompt.destroy();
   scoreText.setVisible(true);
   speedText.setVisible(true);
   comboText.setVisible(true);
-  playTone(scene, 880, 0.2);
+  
+  // Start countdown
+  countdownTimer = 1.0;
+  countdownText = scene.add.text(400, 300, '3', {
+    fontSize: '120px',
+    fontFamily: 'monospace',
+    color: '#00ffff',
+    stroke: '#ff6600',
+    strokeThickness: 8
+  }).setOrigin(0.5);
+  
+  playTone(scene, 440, 0.1);
 }
 
 function endGame(scene) {
@@ -897,6 +1094,7 @@ function restartGame(scene) {
   scene.scene.restart();
   gameOver = false;
   gameStarted = false;
+  gameActive = false;
   enteringName = false;
   nameInputText = null;
   nameCursor = null;
@@ -912,10 +1110,16 @@ function restartGame(scene) {
   particles = [];
   lastSegmentX = 100; // Start segments after INPUT circles
   segmentCounter = 0;
+  lastGapTracks = [];
   boostTimer = 0;
   boostActive = false;
   playerFalling = false;
   playerVY = 0;
+  inputTexts = {};
+  countdownText = null;
+  countdownTimer = 0;
+  firstSegmentX = null;
+  bgScrollOffset = 0;
 }
 
 // =============================================================================
