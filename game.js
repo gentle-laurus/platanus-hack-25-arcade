@@ -36,11 +36,20 @@ const config = {
 const game = new Phaser.Game(config);
 
 // =============================================================================
+// CONSTANTS
+// =============================================================================
+const TRACK_SPACING = 120;
+const SEGMENT_WIDTH = 200;
+const TRACK_WIDTH = 18;
+const NUM_TRACKS = 3;
+const GAP_INTERVAL = 5;
+
+// =============================================================================
 // GAME STATE
 // =============================================================================
 let player, graphics, scoreText, speedText, comboText;
 let tracks = [], segments = [], obstacles = [], powerups = [];
-let currentTrack = 1;
+let currentTrack = Math.floor(NUM_TRACKS / 2);
 let score = 0, combo = 0, speed = 1.5, baseSpeed = 1.5;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
@@ -58,10 +67,6 @@ let nameIndex = 0;
 let nameInputText = null;
 let nameCursor = null;
 
-const TRACK_SPACING = 120;
-const SEGMENT_WIDTH = 200;
-const TRACK_WIDTH = 18;
-
 // =============================================================================
 // CREATE
 // =============================================================================
@@ -70,7 +75,7 @@ function create() {
   graphics = this.add.graphics();
   
   // Initialize tracks (3 horizontal lanes)
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < NUM_TRACKS; i++) {
     tracks.push({
       index: i,
       y: 200 + i * TRACK_SPACING,
@@ -81,8 +86,8 @@ function create() {
   // Player (energy pulse)
   player = {
     x: 200,
-    y: tracks[1].y,
-    targetY: tracks[1].y,
+    y: tracks[Math.floor(NUM_TRACKS / 2)].y,
+    targetY: tracks[Math.floor(NUM_TRACKS / 2)].y,
     size: 16,
     glowPhase: 0,
     trail: [],
@@ -210,7 +215,7 @@ function create() {
       currentTrack--;
       player.targetY = tracks[currentTrack].y;
       playTone(scene, 660, 0.05);
-    } else if (k === 'P1D' && currentTrack < 2 && !playerFalling) {
+    } else if (k === 'P1D' && currentTrack < NUM_TRACKS - 1 && !playerFalling) {
       currentTrack++;
       player.targetY = tracks[currentTrack].y;
       playTone(scene, 660, 0.05);
@@ -399,9 +404,9 @@ function spawnSegment() {
   segmentCounter++;
   
   // Create segment on each track
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < NUM_TRACKS; i++) {
     // Most segments are plain, some are gaps
-    const isGap = segmentCounter % 12 === 0 && Math.random() > 0.6;
+    const isGap = segmentCounter % GAP_INTERVAL === 0 && Math.random() > 0.6;
     
     const seg = {
       x: x,
@@ -416,7 +421,7 @@ function spawnSegment() {
   
   // Spawn obstacles (explosions) rarely
   if (Math.random() > 0.8) {
-    const trackIdx = Math.floor(Math.random() * 3);
+    const trackIdx = Math.floor(Math.random() * NUM_TRACKS);
     obstacles.push({
       x: x + SEGMENT_WIDTH / 2,
       y: tracks[trackIdx].y,
@@ -427,7 +432,7 @@ function spawnSegment() {
   
   // Spawn powerups (lightning) occasionally
   if (Math.random() > 0.85) {
-    const trackIdx = Math.floor(Math.random() * 3);
+    const trackIdx = Math.floor(Math.random() * NUM_TRACKS);
     powerups.push({
       x: x + SEGMENT_WIDTH / 2,
       y: tracks[trackIdx].y,
@@ -900,7 +905,7 @@ function restartGame(scene) {
   speed = 1.5;
   baseSpeed = 1.5;
   maxSpeed = 1.5;
-  currentTrack = 1;
+  currentTrack = Math.floor(NUM_TRACKS / 2);
   segments = [];
   obstacles = [];
   powerups = [];
