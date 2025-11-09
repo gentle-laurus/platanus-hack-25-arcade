@@ -50,16 +50,17 @@ let boostTimer = 0, boostActive = false;
 let particles = [];
 let playerFalling = false;
 let playerVY = 0;
+let maxSpeed = 1.5;
+let highScores = [];
+let enteringName = false;
+let playerName = ['A', 'A', 'A'];
+let nameIndex = 0;
+let nameInputText = null;
+let nameCursor = null;
 
 const TRACK_SPACING = 120;
 const SEGMENT_WIDTH = 200;
 const TRACK_WIDTH = 18;
-
-// Score board
-let scoreboard = [];
-let nameEntryText, namePromptText;
-let playerName = '';
-let enteringName = false;
 
 // =============================================================================
 // CREATE
@@ -122,7 +123,7 @@ function create() {
     strokeThickness: 8
   }).setOrigin(0.5);
   
-  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nJoystick ↑↓: Switch tracks\nButton A: Jump gaps\n\nCollect ⚡ for speed boost\nAvoid ✱ explosions!', {
+  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect ⚡ for speed boost\nAvoid ✱ explosions!', {
     fontSize: '22px',
     fontFamily: 'monospace',
     color: '#ffaa00',
@@ -131,7 +132,7 @@ function create() {
     strokeThickness: 3
   }).setOrigin(0.5);
   
-  startPrompt = scene.add.text(400, 500, 'Press Button A or START to begin', {
+  startPrompt = scene.add.text(400, 500, 'Press ENTER to begin', {
     fontSize: '26px',
     fontFamily: 'monospace',
     color: '#00ff00',
@@ -170,6 +171,33 @@ function create() {
     }
     
     if (!gameStarted) return;
+    
+    // Handle name entry
+    if (enteringName) {
+      if (k === 'P1U') {
+        // Increment letter (A-Z, then wrap)
+        const charCode = playerName[nameIndex].charCodeAt(0);
+        playerName[nameIndex] = String.fromCharCode(charCode === 90 ? 65 : charCode + 1);
+        updateNameDisplay();
+        playTone(scene, 440, 0.05);
+      } else if (k === 'P1D') {
+        // Decrement letter (A-Z, then wrap)
+        const charCode = playerName[nameIndex].charCodeAt(0);
+        playerName[nameIndex] = String.fromCharCode(charCode === 65 ? 90 : charCode - 1);
+        updateNameDisplay();
+        playTone(scene, 440, 0.05);
+      } else if (k === 'P1A') {
+        // Move to next letter or submit
+        nameIndex++;
+        if (nameIndex >= 3) {
+          submitScore(scene);
+        } else {
+          updateCursorPosition();
+          playTone(scene, 660, 0.05);
+        }
+      }
+      return;
+    }
     
     if (gameOver && k === 'START1') {
       restartGame(scene);
@@ -647,31 +675,143 @@ function startGame(scene) {
 
 function endGame(scene) {
   gameOver = true;
-  combo = 0;
   playTone(scene, 220, 0.5);
   
+  // Check if score qualifies for top 5
+  const isHighScore = (highScores.length < 5 || score > highScores[4].score) && score > 0;
+  
+  if (isHighScore) {
+    showNameEntry(scene);
+  } else {
+    showScoreboard(scene, false);
+  }
+}
+
+function showNameEntry(scene) {
+  enteringName = true;
+  playerName = ['A', 'A', 'A'];
+  nameIndex = 0;
+  
   const overlay = scene.add.graphics();
-  overlay.fillStyle(0x000000, 0.75);
+  overlay.fillStyle(0x000000, 0.85);
   overlay.fillRect(0, 0, 800, 600);
   
-  const gameOverTxt = scene.add.text(400, 250, 'BROKEN CIRCUIT', {
-    fontSize: '64px',
+  scene.add.text(400, 150, 'NEW HIGH SCORE!', {
+    fontSize: '56px',
     fontFamily: 'monospace',
-    color: '#ff0000',
-    stroke: '#ffff00',
-    strokeThickness: 8
+    color: '#ffff00',
+    stroke: '#ff6600',
+    strokeThickness: 6
+  }).setOrigin(0.5);
+  
+  scene.add.text(400, 230, 'SCORE: ' + score, {
+    fontSize: '32px',
+    fontFamily: 'monospace',
+    color: '#00ffff',
+    stroke: '#000',
+    strokeThickness: 4
+  }).setOrigin(0.5);
+  
+  scene.add.text(400, 290, 'Enter Your Name:', {
+    fontSize: '28px',
+    fontFamily: 'monospace',
+    color: '#ffaa00',
+    stroke: '#000',
+    strokeThickness: 3
+  }).setOrigin(0.5);
+  
+  nameInputText = scene.add.text(400, 360, playerName.join(''), {
+    fontSize: '72px',
+    fontFamily: 'monospace',
+    color: '#00ff00',
+    stroke: '#000',
+    strokeThickness: 6
+  }).setOrigin(0.5);
+  
+  scene.add.text(400, 460, 'W / S: Change letter\nSpace bar: Confirm', {
+    fontSize: '22px',
+    fontFamily: 'monospace',
+    color: '#888888',
+    align: 'center',
+    stroke: '#000',
+    strokeThickness: 3
+  }).setOrigin(0.5);
+  
+  // Cursor indicator
+  const cursorY = 420;
+  const cursorX = 340 + nameIndex * 40;
+  nameCursor = scene.add.text(cursorX, cursorY, '▲', {
+    fontSize: '32px',
+    fontFamily: 'monospace',
+    color: '#ff00ff'
   }).setOrigin(0.5);
   
   scene.tweens.add({
-    targets: gameOverTxt,
-    scale: { from: 1, to: 1.1 },
-    alpha: { from: 1, to: 0.7 },
-    duration: 700,
+    targets: nameCursor,
+    alpha: { from: 1, to: 0.3 },
+    duration: 400,
     yoyo: true,
     repeat: -1
   });
+}
+
+function updateNameDisplay() {
+  if (nameInputText) {
+    nameInputText.setText(playerName.join(''));
+  }
+}
+
+function updateCursorPosition() {
+  if (nameCursor) {
+    const cursorX = 340 + nameIndex * 40;
+    nameCursor.setX(cursorX);
+  }
+}
+
+function submitScore(scene) {
+  enteringName = false;
+  const name = playerName.join('');
   
-  scene.add.text(400, 350, 'FINAL SCORE: ' + score, {
+  // Add score to high scores
+  highScores.push({ name, score });
+  highScores.sort((a, b) => b.score - a.score);
+  highScores = highScores.slice(0, 5);
+  
+  playTone(scene, 1000, 0.2);
+  
+  // Clear the name entry screen
+  scene.children.removeAll();
+  
+  // Show scoreboard without restarting
+  showScoreboard(scene, true);
+}
+
+function showScoreboard(scene, justSubmitted) {
+  const overlay = scene.add.graphics();
+  overlay.fillStyle(0x000000, 0.85);
+  overlay.fillRect(0, 0, 800, 600);
+  
+  const gameOverTxt = scene.add.text(400, 80, justSubmitted ? 'SCORE SAVED!' : 'GAME OVER', {
+    fontSize: '56px',
+    fontFamily: 'monospace',
+    color: justSubmitted ? '#00ff00' : '#ff0000',
+    stroke: '#ffff00',
+    strokeThickness: 6
+  }).setOrigin(0.5);
+  
+  if (!justSubmitted) {
+    scene.tweens.add({
+      targets: gameOverTxt,
+      scale: { from: 1, to: 1.1 },
+      alpha: { from: 1, to: 0.7 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1
+    });
+  }
+  
+  // High Scores
+  scene.add.text(400, 160, '═══ HIGH SCORES ═══', {
     fontSize: '36px',
     fontFamily: 'monospace',
     color: '#00ffff',
@@ -679,7 +819,59 @@ function endGame(scene) {
     strokeThickness: 4
   }).setOrigin(0.5);
   
-  const restartTxt = scene.add.text(400, 450, 'Press START to restart', {
+  if (highScores.length === 0) {
+    scene.add.text(400, 300, 'No scores yet!\nBe the first!', {
+      fontSize: '28px',
+      fontFamily: 'monospace',
+      color: '#888888',
+      align: 'center',
+      stroke: '#000',
+      strokeThickness: 3
+    }).setOrigin(0.5);
+  } else {
+    highScores.forEach((entry, i) => {
+      const y = 230 + i * 50;
+      const isNew = justSubmitted && entry.score === score && entry.name === playerName.join('');
+      const color = isNew ? '#ffff00' : '#ffffff';
+      const rank = (i + 1) + '.';
+      
+      const rankText = scene.add.text(200, y, rank, {
+        fontSize: '28px',
+        fontFamily: 'monospace',
+        color: '#ffaa00',
+        stroke: '#000',
+        strokeThickness: 3
+      });
+      
+      const nameText = scene.add.text(250, y, entry.name, {
+        fontSize: '28px',
+        fontFamily: 'monospace',
+        color: color,
+        stroke: '#000',
+        strokeThickness: 3
+      });
+      
+      const scoreText = scene.add.text(600, y, entry.score.toString(), {
+        fontSize: '28px',
+        fontFamily: 'monospace',
+        color: color,
+        stroke: '#000',
+        strokeThickness: 3
+      }).setOrigin(1, 0);
+      
+      if (isNew) {
+        scene.tweens.add({
+          targets: [nameText, scoreText],
+          scale: { from: 1, to: 1.1 },
+          duration: 500,
+          yoyo: true,
+          repeat: -1
+        });
+      }
+    });
+  }
+  
+  const restartTxt = scene.add.text(400, 520, 'Press ENTER to return to menu', {
     fontSize: '24px',
     fontFamily: 'monospace',
     color: '#00ff00',
@@ -700,16 +892,20 @@ function restartGame(scene) {
   scene.scene.restart();
   gameOver = false;
   gameStarted = false;
+  enteringName = false;
+  nameInputText = null;
+  nameCursor = null;
   score = 0;
   combo = 0;
   speed = 1.5;
   baseSpeed = 1.5;
+  maxSpeed = 1.5;
   currentTrack = 1;
   segments = [];
   obstacles = [];
   powerups = [];
   particles = [];
-  lastSegmentX = 0;
+  lastSegmentX = 100; // Start segments after INPUT circles
   segmentCounter = 0;
   boostTimer = 0;
   boostActive = false;
