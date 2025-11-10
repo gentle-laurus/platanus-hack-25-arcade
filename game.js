@@ -266,7 +266,7 @@ function create() {
     const ctx = scene.sound.context;
     if (ctx && ctx.state !== 'running') ctx.resume();
     playTone(scene, 440, 0.15);
-    startTitleMusic();  // Start title screen music
+    startScoreboardMusic();  // Start title screen with scoreboard music
   };
   if (scene.sound.locked) {
     scene.input.once('pointerdown', resumeAudio);
@@ -286,7 +286,7 @@ function update(_time, delta) {
   if (showingScoreboard) {
     updateScoreboardMusic(this, dt);
   } else if (!gameStarted) {
-    updateTitleMusic(this, dt);  // Title screen music
+    updateScoreboardMusic(this, dt);  // Title screen uses scoreboard music
   } else if (gameStarted) {
     updateMusic(this, dt);
   }
@@ -1273,7 +1273,7 @@ function startGame(scene) {
   speedText.setVisible(true);
   
   // Stop title music and start gameplay music
-  stopTitleMusic();
+  stopScoreboardMusic();
   startMusic();
   
   // Start countdown
