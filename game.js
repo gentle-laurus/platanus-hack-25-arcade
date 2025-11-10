@@ -531,36 +531,27 @@ function spawnSegment() {
   // Update tracking for next segment
   lastGapTracks = currentGapTracks;
   
-  // Spawn obstacles (explosions) rarely
-  let obstacleTrackIdx = null;
-  if (Math.random() > 0.8) {
-    obstacleTrackIdx = Math.floor(Math.random() * NUM_TRACKS);
-    obstacles.push({
-      x: x + SEGMENT_WIDTH / 2,
-      y: tracks[obstacleTrackIdx].y,
-      size: 20,
-      pulse: 0
-    });
-  }
-  
-  // Spawn powerups (lightning) occasionally
-  // Exclude the track where an obstacle spawned to prevent overlap
-  if (Math.random() > 0.85) {
-    const availableTracks = [];
-    for (let i = 0; i < NUM_TRACKS; i++) {
-      if (i !== obstacleTrackIdx) {
-        availableTracks.push(i);
+  // Spawn objects: each track has independent 45% chance of object
+  // If object spawns: 55% explosion, 45% boost
+  for (let i = 0; i < NUM_TRACKS; i++) {
+    if (Math.random() > 0.55) {
+      // Decide type: 55% explosion, 45% boost
+      if (Math.random() > 0.45) {
+        // Spawn explosion
+        obstacles.push({
+          x: x + SEGMENT_WIDTH / 2,
+          y: tracks[i].y,
+          size: 20,
+          pulse: 0
+        });
+      } else {
+        // Spawn boost
+        powerups.push({
+          x: x + SEGMENT_WIDTH / 2,
+          y: tracks[i].y,
+          angle: 0
+        });
       }
-    }
-    
-    // Only spawn powerup if there are available tracks
-    if (availableTracks.length > 0) {
-      const trackIdx = availableTracks[Math.floor(Math.random() * availableTracks.length)];
-      powerups.push({
-        x: x + SEGMENT_WIDTH / 2,
-        y: tracks[trackIdx].y,
-        angle: 0
-      });
     }
   }
 }
