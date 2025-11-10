@@ -47,10 +47,10 @@ const GAP_INTERVAL = 5;
 // =============================================================================
 // GAME STATE
 // =============================================================================
-let player, graphics, scoreText, speedText, comboText;
+let player, graphics, scoreText, speedText;
 let tracks = [], segments = [], obstacles = [], powerups = [];
 let currentTrack = Math.floor(NUM_TRACKS / 2);
-let score = 0, combo = 0, speed = 1.5, baseSpeed = 3.5;
+let score = 0, speed = 1.5, baseSpeed = 3.5;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
 let bgScrollOffset = 0; // Smooth background scrolling
@@ -105,7 +105,7 @@ function create() {
   };
   
   // UI
-  scoreText = scene.add.text(16, 16, 'SCORE: 0', {
+  scoreText = scene.add.text(16, 16, 'TX DATA: 0', {
     fontSize: '28px',
     fontFamily: 'monospace',
     color: '#00ffff',
@@ -113,21 +113,13 @@ function create() {
     strokeThickness: 4
   }).setVisible(false);
   
-  speedText = scene.add.text(16, 50, 'SPEED: 1.0x', {
+  speedText = scene.add.text(16, 50, 'TX RATE: 1.0x', {
     fontSize: '20px',
     fontFamily: 'monospace',
     color: '#ffaa00',
     stroke: '#000',
     strokeThickness: 3
   }).setVisible(false);
-  
-  comboText = scene.add.text(400, 16, '', {
-    fontSize: '24px',
-    fontFamily: 'monospace',
-    color: '#ff00ff',
-    stroke: '#000',
-    strokeThickness: 4
-  }).setOrigin(0.5, 0).setVisible(false);
   
   // Title screen
   titleText = scene.add.text(400, 140, 'CIRCUIT BREAKER', {
@@ -138,7 +130,7 @@ function create() {
     strokeThickness: 8
   }).setOrigin(0.5);
   
-  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect ⚡ for speed boost\nAvoid ✱ explosions!', {
+  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect ⚡ for Tx Rate boost\nAvoid ✱ explosions!', {
     fontSize: '22px',
     fontFamily: 'monospace',
     color: '#ffaa00',
@@ -170,16 +162,6 @@ function create() {
     yoyo: true,
     repeat: -1
   });
-  
-  // Capacitor text (positioned to the right of the capacitor)
-  capacitorText = scene.add.text(470, 400, '2500uF\n25V', {
-    fontSize: '16px',
-    fontFamily: 'monospace',
-    color: '#000000',
-    align: 'center',
-    stroke: '#7dd3c0',
-    strokeThickness: 2
-  }).setOrigin(0.5).setRotation(-Math.PI / 2);
   
   // Initialize segments
   for (let i = 0; i < 8; i++) {
@@ -477,14 +459,8 @@ function update(_time, delta) {
     
     // Update score
     score += Math.floor(speed * dt * 8);
-    scoreText.setText('SCORE: ' + score);
-    speedText.setText('SPEED: ' + speed.toFixed(1) + 'x');
-    
-    if (combo > 0) {
-      comboText.setText('COMBO x' + combo);
-    } else {
-      comboText.setText('');
-    }
+    scoreText.setText('TX DATA: ' + score + ' B');
+    speedText.setText('TX RATE: ' + speed.toFixed(1) + 'x');
     
     // Increase difficulty
     if (score % 600 < 10 && baseSpeed < 8) {
@@ -582,7 +558,6 @@ function spawnSegment() {
 // =============================================================================
 function collectPowerup(pow, scene) {
   score += 50;
-  combo++;
   boostActive = true;
   boostTimer = 3;
   speed = baseSpeed * 1.6;
@@ -747,8 +722,8 @@ function drawCircuitCables(g, chipX, chipY, chipWidth, chipHeight, chipScale = 1
   const pinSpacing = 15 * chipScale;
   const pinWidth = 4 * chipScale;
   const pinOffset = 8 * chipScale;
-  const topBottomPins = Math.floor((chipWidth - pinOffset * 2) / pinSpacing);
-  const leftRightPins = Math.floor((chipHeight - pinOffset * 2) / pinSpacing);
+  const topBottomPins = Math.floor((chipWidth - pinOffset * 2) / pinSpacing)+2;
+  const leftRightPins = Math.floor((chipHeight - pinOffset * 2) / pinSpacing)+2;
   
   const chipPins = [];
   
@@ -887,10 +862,10 @@ function drawCapacitor(g, x, y, scale = 1) {
   // Silver leads
   g.fillStyle(0xc0c0c0, 1);
   const leadWidth = 3 * scale;
-  const leadLength = 15 * scale;
+  const leadLength = 12 * scale;
   const leadSpacing = 12 * scale;
-  g.fillRect(x - leadSpacing/2 - leadWidth/2, y + h/2, leadWidth, leadLength);
-  g.fillRect(x + leadSpacing/2 - leadWidth/2, y + h/2, leadWidth, leadLength);
+  g.fillRect(x - leadSpacing/2 - leadWidth/2, y + h/2+13, leadWidth, leadLength);
+  g.fillRect(x + leadSpacing/2 - leadWidth/2, y + h/2+13, leadWidth, leadLength);
 }
 
 function drawResistor(g, x, y, scale = 1) {
@@ -916,10 +891,6 @@ function drawResistor(g, x, y, scale = 1) {
   const bandWidth = 4 * scale;
   const bandSpacing = bodyLength / 5;
   
-  // First band: Yellow
-  g.fillStyle(0xffff00, 1);
-  g.fillRect(x - bodyLength/2 + bandSpacing * 0.5, y - bodyRadius, bandWidth, bodyRadius * 2);
-  
   // Second band: Purple/Violet
   g.fillStyle(0x800080, 1);
   g.fillRect(x - bodyLength/2 + bandSpacing * 1.2, y - bodyRadius, bandWidth, bodyRadius * 2);
@@ -927,14 +898,6 @@ function drawResistor(g, x, y, scale = 1) {
   // Third band: Orange
   g.fillStyle(0xff6600, 1);
   g.fillRect(x - bodyLength/2 + bandSpacing * 1.9, y - bodyRadius, bandWidth, bodyRadius * 2);
-  
-  // Fourth band (Tolerance): Gold (wider, closer to right end)
-  g.fillStyle(0xffd700, 1);
-  g.fillRect(x + bodyLength/2 - bandSpacing * 0.8, y - bodyRadius, bandWidth * 1.3, bodyRadius * 2);
-  
-  // Highlight on top-left (lighting effect)
-  g.fillStyle(0xe4d4b8, 0.5);
-  g.fillEllipse(x - bodyLength * 0.2, y - bodyRadius * 0.5, bodyLength * 0.6, bodyRadius * 1.2);
 }
 
 function drawChip(g, x, y, width, height, scale = 1) {
@@ -950,10 +913,10 @@ function drawChip(g, x, y, width, height, scale = 1) {
   g.strokeRect(x - width/2, y - height/2, width, height);
   
   // Calculate number of pins based on dimensions
-  const topBottomPins = Math.floor((width - pinOffset * 2) / pinSpacing);
-  const leftRightPins = Math.floor((height - pinOffset * 2) / pinSpacing);
+  const topBottomPins = Math.floor((width - pinOffset * 2) / pinSpacing) + 2;
+  const leftRightPins = Math.floor((height - pinOffset * 2) / pinSpacing) + 2;
   
-  // Pins on all sides
+  // Pins on all sidesdrawChip
   g.fillStyle(0x8a8a8a, 1);
   
   // Top pins
@@ -1172,7 +1135,6 @@ function startGame(scene) {
   if (capacitorText) capacitorText.destroy();
   scoreText.setVisible(true);
   speedText.setVisible(true);
-  comboText.setVisible(true);
   
   // Start countdown
   countdownTimer = 1.0;
@@ -1208,8 +1170,8 @@ function showGameOver(scene) {
   overlay.fillStyle(0x000000, 0.85);
   overlay.fillRect(0, 0, 800, 600);
   
-  const gameOverTxt = scene.add.text(400, 250, 'GAME OVER', {
-    fontSize: '72px',
+  const gameOverTxt = scene.add.text(400, 200, 'GAME OVER', {
+    fontSize: '78px',
     fontFamily: 'monospace',
     color: '#ff0000',
     stroke: '#ffff00',
@@ -1225,16 +1187,16 @@ function showGameOver(scene) {
     repeat: -1
   });
   
-  scene.add.text(400, 350, 'SCORE: ' + score, {
-    fontSize: '36px',
+  scene.add.text(400, 340, 'TRANSFERED DATA: ' + score + ' B', {
+    fontSize: '32px',
     fontFamily: 'monospace',
     color: '#00ffff',
     stroke: '#000',
     strokeThickness: 4
   }).setOrigin(0.5);
   
-  continuePrompt =scene.add.text(400, 420, '<Press ENTER to continue>', {
-    fontSize: '26px',
+  continuePrompt =scene.add.text(400, 470, '<Press ENTER to continue>', {
+    fontSize: '24px',
     fontFamily: 'monospace',
     color: '#00ff00',
     stroke: '#000',
@@ -1266,7 +1228,7 @@ function showNameEntry(scene) {
     strokeThickness: 6
   }).setOrigin(0.5);
   
-  scene.add.text(400, 230, 'SCORE: ' + score, {
+  scene.add.text(400, 230, 'TRANSFERED DATA: ' + score + ' B', {
     fontSize: '32px',
     fontFamily: 'monospace',
     color: '#00ffff',
@@ -1415,7 +1377,7 @@ function showScoreboard(scene, justSubmitted) {
         strokeThickness: 3
       }).setDepth(1000);
       
-      const scoreText = scene.add.text(600, y, entry.score.toString(), {
+      const scoreText = scene.add.text(600, y, entry.score.toString() + ' B', {
         fontSize: '28px',
         fontFamily: 'monospace',
         color: scoreColor,
@@ -1467,7 +1429,6 @@ function restartGame(scene) {
   nameInputText = null;
   nameCursor = null;
   score = 0;
-  combo = 0;
   speed = 1.5;
   baseSpeed = 1.5;
   maxSpeed = 1.5;
