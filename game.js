@@ -76,10 +76,16 @@ let nameIndex = 0;
 let nameInputText = null;
 let nameCursor = null;
 let showingGameOver = false;
+let showingScoreboard = false;
 let musicPlaying = false;
 let musicTimer = 0;
 let musicPattern = [];
 let musicIndex = 0;
+let titleMusicPlaying = false;
+let titleMusicTimer = 0;
+let titleMusicPattern = [];
+let titleMusicIndex = 0;
+let titleMusicLoopCount = 0;
 
 // =============================================================================
 // CREATE
@@ -251,7 +257,19 @@ function create() {
     }
   });
   
-  playTone(scene, 440, 0.15);
+  // Ensure audio context is unlocked by a user gesture before playing sounds
+  const resumeAudio = () => {
+    const ctx = scene.sound.context;
+    if (ctx && ctx.state !== 'running') ctx.resume();
+    playTone(scene, 440, 0.15);
+    startTitleMusic();  // Start title screen music
+  };
+  if (scene.sound.locked) {
+    scene.input.once('pointerdown', resumeAudio);
+    scene.input.keyboard.once('keydown', resumeAudio);
+  } else {
+    resumeAudio();
+  }
 }
 
 // =============================================================================
@@ -260,8 +278,14 @@ function create() {
 function update(_time, delta) {
   const dt = delta / 1000;
   
-  // Update background music
-  updateMusic(this, dt);
+  // Update background music (gameplay, title screen, or scoreboard)
+  if (showingScoreboard) {
+    updateTitleMusic(this, dt);
+  } else if (!gameStarted) {
+    updateTitleMusic(this, dt);  // Title screen music
+  } else if (gameStarted) {
+    updateMusic(this, dt);
+  }
   
   // Update background scroll (smooth continuous scrolling)
   if (!gameStarted) {
@@ -1244,7 +1268,8 @@ function startGame(scene) {
   scoreText.setVisible(true);
   speedText.setVisible(true);
   
-  // Start background music
+  // Stop title music and start gameplay music
+  stopTitleMusic();
   startMusic();
   
   // Start countdown
@@ -1449,6 +1474,14 @@ function submitScore(scene) {
 }
 
 function showScoreboard(scene, justSubmitted) {
+  showingScoreboard = true;
+  stopMusic();
+  startTitleMusic();
+  // Best effort: ensure audio context is running
+  const _ctx = scene.sound.context;
+  if (_ctx && _ctx.state !== 'running' && _ctx.resume) {
+    _ctx.resume();
+  }
   // Draw static circuit board background
   const bgGraphics = scene.add.graphics();
   drawStaticCircuitBoard(bgGraphics);
@@ -1558,6 +1591,7 @@ function restartGame(scene) {
   gameOver = false;
   gameStarted = false;
   gameActive = false;
+  showingScoreboard = false;
   enteringName = false;
   showingGameOver = false;
   nameInputText = null;
@@ -1585,6 +1619,7 @@ function restartGame(scene) {
   firstSegmentX = null;
   bgScrollOffset = 0;
   stopMusic();
+  stopTitleMusic();
 }
 
 // =============================================================================
@@ -1777,4 +1812,128 @@ function stopMusic() {
   musicPlaying = false;
   musicIndex = 0;
   musicTimer = 0;
+}
+
+// =============================================================================
+// TITLE SCREEN MUSIC
+// =============================================================================
+function initTitleMusic() {
+  const V = 0.15;
+  const S = 0.35;   // Increased from 0.22 for slower tempo
+
+  // Random glitchy computer sounds - corrupted data patterns
+  // Frequencies jump around unpredictably like system errors
+  titleMusicPattern = [
+    // Glitch burst 1
+    [120, S * 0.3, V], [0, S * 0.1, 0], [55, S * 0.4, V], [0, S * 0.15, 0],
+    [340, S * 0.2, V], [0, S * 0.08, 0], [88, S * 0.35, V], [0, S * 0.2, 0],
+    
+    // Data corruption noise
+    [200, S * 0.25, V], [0, S * 0.12, 0], [45, S * 0.3, V], [0, S * 0.18, 0],
+    [280, S * 0.22, V], [0, S * 0.1, 0], [110, S * 0.4, V], [0, S * 0.3, 0],
+    
+    // Random high-frequency glitches
+    [500, S * 0.15, V * 0.8], [0, S * 0.08, 0], [65, S * 0.35, V], [0, S * 0.15, 0],
+    [350, S * 0.2, V], [0, S * 0.1, 0], [92, S * 0.3, V], [0, S * 0.4, 0],
+    
+    // System crash sounds
+    [150, S * 0.4, V * 1.2], [0, S * 0.2, 0], [75, S * 0.25, V], [0, S * 0.15, 0],
+    [420, S * 0.18, V], [0, S * 0.12, 0], [58, S * 0.35, V], [0, S * 0.5, 0]
+  ];
+
+  titleMusicIndex = 0;
+  titleMusicTimer = 0;
+  titleMusicLoopCount = 0;
+}
+
+
+
+function updateTitleMusic(scene, dt) {
+  if (!titleMusicPlaying) return;
+  
+  titleMusicTimer += dt;
+  
+  if (titleMusicIndex < titleMusicPattern.length) {
+    const [freq, dur, vol] = titleMusicPattern[titleMusicIndex];
+    
+    if (titleMusicTimer >= dur) {
+      if (freq > 0 && vol > 0) {
+        playTitleMusicNote(scene, freq, dur, vol);
+      }
+      
+      titleMusicTimer -= dur;
+      titleMusicIndex++;
+      
+      // Loop back to start
+      if (titleMusicIndex >= titleMusicPattern.length) {
+        titleMusicIndex = 0;
+      }
+    }
+  }
+}
+
+function playTitleMusicNote(scene, freq, dur, vol) {
+  const ctx = scene.sound.context;
+  const now = ctx.currentTime;
+  
+  if (freq === 0) return; // Skip silence
+  
+  // Create glitchy sound with random frequency variation
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  
+  // Add random pitch warble for glitch effect
+  const baseFreq = freq * (0.95 + Math.random() * 0.1); // ±5% frequency jitter
+  osc.frequency.value = baseFreq;
+  osc.type = 'square';
+  
+  // Random frequency jumps during the note for more glitchy feel
+  if (Math.random() > 0.6) {
+    const jumpTime = now + dur * (0.3 + Math.random() * 0.4);
+    osc.frequency.setValueAtTime(baseFreq, jumpTime);
+    osc.frequency.setValueAtTime(baseFreq * (0.7 + Math.random() * 0.6), jumpTime + 0.01);
+  }
+  
+  // Simple on/off envelope - instant start, exponential fade out
+  gain.gain.setValueAtTime(vol, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + dur);
+  
+  osc.start(now);
+  osc.stop(now + dur);
+  
+  // Sometimes add random secondary glitch tone
+  if (Math.random() > 0.7) {
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    
+    const glitchFreq = freq * (0.5 + Math.random() * 2); // Wild random frequency
+    osc2.frequency.value = glitchFreq;
+    osc2.type = Math.random() > 0.5 ? 'square' : 'triangle'; // Random wave type
+    
+    const glitchDur = dur * (0.3 + Math.random() * 0.7);
+    gain2.gain.setValueAtTime(vol * 0.6, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + glitchDur);
+    
+    osc2.start(now);
+    osc2.stop(now + glitchDur);
+  }
+}
+
+function startTitleMusic() {
+  if (!titleMusicPlaying) {
+    titleMusicPlaying = true;
+    initTitleMusic(); // now it actually defines pattern
+  }
+}
+
+function stopTitleMusic() {
+  titleMusicPlaying = false;
+  titleMusicIndex = 0;
+  titleMusicTimer = 0;
 }
