@@ -324,7 +324,10 @@ function update(_time, delta) {
   
   if (gameOver) {
     updateParticles(dt);
-    drawGame();
+    // Only draw animated background if showing game over screen, not scoreboard
+    if (showingGameOver) {
+      drawGame();
+    }
     return;
   }
   
@@ -625,6 +628,31 @@ function updateParticles(dt) {
 // =============================================================================
 // CIRCUIT BOARD BACKGROUND
 // =============================================================================
+function drawStaticCircuitBoard(g) {
+  // Dark PCB green background
+  g.fillStyle(0x2a4a2a, 1);
+  g.fillRect(0, 0, 800, 600);
+  
+  // Static grid pattern - horizontal lines
+  g.lineStyle(1, 0x4a6a4a, 0.6);
+  for (let y = 0; y < 600; y += 40) {
+    g.lineBetween(0, y, 800, y);
+  }
+  
+  // Static grid pattern - vertical lines
+  for (let x = 0; x < 800; x += 40) {
+    g.lineBetween(x, 0, x, 600);
+  }
+  
+  // Solder pads at grid intersections
+  g.fillStyle(0x5a7a5a, 0.8);
+  for (let y = 0; y < 600; y += 40) {
+    for (let x = 0; x < 800; x += 40) {
+      g.fillCircle(x, y, 2);
+    }
+  }
+}
+
 function drawCircuitBoard(g, offset) {
   // Dark PCB green background
   g.fillStyle(0x2a4a2a, 1);
@@ -1052,24 +1080,74 @@ function submitScore(scene) {
 }
 
 function showScoreboard(scene, justSubmitted) {
-  const overlay = scene.add.graphics();
-  overlay.fillStyle(0x000000, 0.85);
-  overlay.fillRect(0, 0, 800, 600);
+  // Draw static circuit board background
+  const bgGraphics = scene.add.graphics();
+  drawStaticCircuitBoard(bgGraphics);
+  
+  // Draw chip component at top center
+  const chipGraphics = scene.add.graphics();
+  const chipX = 400;
+  const chipY = 60;
+  const chipWidth = 80;
+  const chipHeight = 50;
+  
+  // Chip body (dark grey/black)
+  chipGraphics.fillStyle(0x1a1a1a, 1);
+  chipGraphics.fillRect(chipX - chipWidth/2, chipY - chipHeight/2, chipWidth, chipHeight);
+  chipGraphics.lineStyle(2, 0x4a4a4a, 1);
+  chipGraphics.strokeRect(chipX - chipWidth/2, chipY - chipHeight/2, chipWidth, chipHeight);
+  
+  // Pins on all sides
+  chipGraphics.fillStyle(0x8a8a8a, 1);
+  const pinLength = 6;
+  const pinSpacing = 8;
+  
+  // Top pins
+  for (let i = 0; i < 8; i++) {
+    const pinX = chipX - chipWidth/2 + 8 + i * pinSpacing;
+    chipGraphics.fillRect(pinX - 2, chipY - chipHeight/2 - pinLength, 4, pinLength);
+  }
+  
+  // Bottom pins
+  for (let i = 0; i < 8; i++) {
+    const pinX = chipX - chipWidth/2 + 8 + i * pinSpacing;
+    chipGraphics.fillRect(pinX - 2, chipY + chipHeight/2, 4, pinLength);
+  }
+  
+  // Left pins
+  for (let i = 0; i < 5; i++) {
+    const pinY = chipY - chipHeight/2 + 8 + i * pinSpacing;
+    chipGraphics.fillRect(chipX - chipWidth/2 - pinLength, pinY - 2, pinLength, 4);
+  }
+  
+  // Right pins
+  for (let i = 0; i < 5; i++) {
+    const pinY = chipY - chipHeight/2 + 8 + i * pinSpacing;
+    chipGraphics.fillRect(chipX + chipWidth/2, pinY - 2, pinLength, 4);
+  }
   
   // High Scores
-  scene.add.text(400, 160, '═══ HIGH SCORES ═══', {
-    fontSize: '36px',
+  highScoreText = scene.add.text(400, 160, '═══ HIGH SCORES ═══', {
+    fontSize: '54px',
     fontFamily: 'monospace',
     color: '#00ffff',
-    stroke: '#000',
-    strokeThickness: 4
+    stroke: '#ff6600',
+    strokeThickness: 6
   }).setOrigin(0.5);
+
+  scene.tweens.add({
+    targets: highScoreText,
+    scale: { from: 1, to: 1.05 },
+    duration: 800,
+    yoyo: true,
+    repeat: -1
+  });
   
   if (highScores.length === 0) {
     scene.add.text(400, 300, 'No scores yet!\nBe the first!', {
       fontSize: '28px',
       fontFamily: 'monospace',
-      color: '#888888',
+      color: '#ffaa00',
       align: 'center',
       stroke: '#000',
       strokeThickness: 3
@@ -1078,21 +1156,22 @@ function showScoreboard(scene, justSubmitted) {
     highScores.forEach((entry, i) => {
       const y = 230 + i * 50;
       const isNew = justSubmitted && entry.score === score && entry.name === playerName.join('');
-      const color = isNew ? '#ffff00' : '#ffffff';
-      const rank = (i + 1) + '.';
+      const nameColor = isNew ? '#ffff00' : '#ffaa00';
+      const scoreColor = isNew ? '#ffff00' : '#ffaa00';
+      const rank = '0x' + (i + 1).toString(16).toUpperCase();
       
       const rankText = scene.add.text(200, y, rank, {
         fontSize: '28px',
         fontFamily: 'monospace',
-        color: '#ffaa00',
+        color: '#00ffff',
         stroke: '#000',
         strokeThickness: 3
       });
       
-      const nameText = scene.add.text(250, y, entry.name, {
+      const nameText = scene.add.text(320, y, entry.name, {
         fontSize: '28px',
         fontFamily: 'monospace',
-        color: color,
+        color: nameColor,
         stroke: '#000',
         strokeThickness: 3
       });
@@ -1100,24 +1179,14 @@ function showScoreboard(scene, justSubmitted) {
       const scoreText = scene.add.text(600, y, entry.score.toString(), {
         fontSize: '28px',
         fontFamily: 'monospace',
-        color: color,
+        color: scoreColor,
         stroke: '#000',
         strokeThickness: 3
       }).setOrigin(1, 0);
-      
-      if (isNew) {
-        scene.tweens.add({
-          targets: [nameText, scoreText],
-          scale: { from: 1, to: 1.1 },
-          duration: 500,
-          yoyo: true,
-          repeat: -1
-        });
-      }
     });
   }
   
-  const restartTxt = scene.add.text(400, 520, 'Press ENTER to return to menu', {
+  const restartTxt = scene.add.text(400, 530, 'Press ENTER to return to menu', {
     fontSize: '24px',
     fontFamily: 'monospace',
     color: '#00ff00',
