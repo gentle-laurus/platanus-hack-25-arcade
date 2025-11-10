@@ -259,8 +259,12 @@ function update(_time, delta) {
   // Update background scroll (smooth continuous scrolling)
   if (!gameStarted) {
     bgScrollOffset += speed * dt * 30; // Slower for title screen
-  } else {
+  } else if (gameActive) {
+    // Normal game speed
     bgScrollOffset += speed * dt * 100;
+  } else {
+    // During countdown, use slower speed to match visual appearance when segments are static
+    bgScrollOffset += speed * dt * 50;
   }
   
   // Update grid animation
