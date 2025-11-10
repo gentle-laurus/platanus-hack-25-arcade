@@ -244,13 +244,23 @@ function create() {
     if (!gameActive) return;
     
     if (k === 'P1U' && currentTrack > 0 && !playerFalling) {
-      currentTrack--;
-      player.targetY = tracks[currentTrack].y;
-      playTone(scene, 660, 0.05);
+      const next = currentTrack - 1;
+      if (isLaneSafeAtX(next, player.x)) {
+        currentTrack = next;
+        player.targetY = tracks[next].y;
+        playTone(scene, 660, 0.05);
+      } else {
+        playTone(scene, 220, 0.05);
+      }
     } else if (k === 'P1D' && currentTrack < NUM_TRACKS - 1 && !playerFalling) {
-      currentTrack++;
-      player.targetY = tracks[currentTrack].y;
-      playTone(scene, 660, 0.05);
+      const next = currentTrack + 1;
+      if (isLaneSafeAtX(next, player.x)) {
+        currentTrack = next;
+        player.targetY = tracks[next].y;
+        playTone(scene, 660, 0.05);
+      } else {
+        playTone(scene, 220, 0.05);
+      }
     } else if (k === 'P1A' && !playerFalling) {
       // Boost jump with upward velocity
       playerVX = -80;
@@ -274,6 +284,29 @@ function create() {
   } else {
     resumeAudio();
   }
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+function isLaneSafeAtX(trackIndex, x) {
+  const segs = segments.filter(s =>
+    s.track === trackIndex &&
+    x >= s.x && x <= s.x + s.width
+  );
+  
+  const onGap = segs.length === 0 || segs.some(s => s.type === 'gap');
+  if (!onGap) return true;
+  
+  const gapSeg = segs.find(s => s.type === 'gap');
+  // Allow only if a gap obstacle (capacitor/resistor) bridges this gap
+  return obstacles.some(o =>
+    o.isGapObstacle &&
+    o.y === tracks[trackIndex].y &&
+    (gapSeg
+      ? (o.x >= gapSeg.x && o.x <= gapSeg.x + gapSeg.width)
+      : Math.abs(o.x - x) < SEGMENT_WIDTH / 2)
+  );
 }
 
 // =============================================================================
