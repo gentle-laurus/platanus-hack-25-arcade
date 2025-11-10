@@ -76,6 +76,10 @@ let nameIndex = 0;
 let nameInputText = null;
 let nameCursor = null;
 let showingGameOver = false;
+let musicPlaying = false;
+let musicTimer = 0;
+let musicPattern = [];
+let musicIndex = 0;
 
 // =============================================================================
 // CREATE
@@ -255,6 +259,9 @@ function create() {
 // =============================================================================
 function update(_time, delta) {
   const dt = delta / 1000;
+  
+  // Update background music
+  updateMusic(this, dt);
   
   // Update background scroll (smooth continuous scrolling)
   if (!gameStarted) {
@@ -1237,6 +1244,9 @@ function startGame(scene) {
   scoreText.setVisible(true);
   speedText.setVisible(true);
   
+  // Start background music
+  startMusic();
+  
   // Start countdown
   countdownTimer = 1.2;
   countdownText = scene.add.text(400, 300, '3', {
@@ -1574,6 +1584,7 @@ function restartGame(scene) {
   countdownTimer = 0;
   firstSegmentX = null;
   bgScrollOffset = 0;
+  stopMusic();
 }
 
 // =============================================================================
@@ -1651,4 +1662,115 @@ function playHighScoreSound(scene) {
     osc.start(startTime);
     osc.stop(startTime + noteDuration);
   });
+}
+
+// =============================================================================
+// BACKGROUND MUSIC - Dark digital PC speaker style (DOS-era inspired)
+// =============================================================================
+function initMusic() {
+  // Dark, machine-like industrial beeps - repetitive, mechanical, no melody
+  // Format: [frequency, duration, volume]
+  // Very low frequencies for dark, machine-like sound
+  // C2=65, D2=73, Eb2=78, F2=87, G2=98, Ab2=104, Bb2=117
+  // C3=131, Eb3=156, F3=175, Ab3=208
+  // Repetitive, pulsing pattern like a machine or circuit board
+  musicPattern = [
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05],
+    [98, 0.15, 0.05], [117, 0.15, 0.05], [98, 0.15, 0.05], [131, 0.15, 0.05],
+    [98, 0.15, 0.05], [117, 0.15, 0.05], [98, 0.15, 0.05], [156, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05],
+    [78, 0.2, 0.06], [87, 0.15, 0.05], [98, 0.15, 0.05], [104, 0.15, 0.05],
+    [117, 0.15, 0.05], [131, 0.15, 0.05], [156, 0.15, 0.05], [175, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
+    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05]
+  ];
+  musicIndex = 0;
+  musicTimer = 0;
+}
+
+function updateMusic(scene, dt) {
+  // Only play during active gameplay (not on title, game over, name entry, or scoreboard)
+  if (!musicPlaying || !gameStarted || gameOver || enteringName) return;
+  
+  musicTimer += dt;
+  
+  if (musicIndex < musicPattern.length) {
+    const [freq, dur, vol] = musicPattern[musicIndex];
+    
+    // Play note immediately when timer reaches duration, then move to next
+    if (musicTimer >= dur) {
+      if (freq > 0 && vol > 0) {
+        playMusicNote(scene, freq, dur, vol);
+      }
+      
+      musicTimer -= dur; // Subtract duration instead of resetting to 0 for smoother timing
+      musicIndex++;
+      
+      // Loop back to start
+      if (musicIndex >= musicPattern.length) {
+        musicIndex = 0;
+      }
+    }
+  }
+}
+
+function playMusicNote(scene, freq, dur, vol) {
+  const ctx = scene.sound.context;
+  const now = ctx.currentTime;
+  
+  // Machine-like industrial beep - harsh, mechanical, no smoothness
+  // Square wave with instant on/off for raw machine sound
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  
+  osc.frequency.value = freq;
+  osc.type = 'square'; // Harsh, mechanical square wave
+  
+  // Instant on/off - like a machine pulse
+  gain.gain.setValueAtTime(vol, now);
+  gain.gain.setValueAtTime(vol, now + dur * 0.95);
+  gain.gain.setValueAtTime(0, now + dur); // Instant cutoff
+  
+  osc.start(now);
+  osc.stop(now + dur);
+  
+  // Add deep machine hum (octave below) - more frequent for industrial feel
+  if (Math.random() > 0.5) {
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    
+    // Deep machine pulse - octave below
+    osc2.frequency.value = freq * 0.5;
+    osc2.type = 'square'; // Harsh machine bass
+    
+    gain2.gain.setValueAtTime(vol * 0.3, now);
+    gain2.gain.setValueAtTime(vol * 0.3, now + dur * 0.95);
+    gain2.gain.setValueAtTime(0, now + dur);
+    
+    osc2.start(now);
+    osc2.stop(now + dur);
+  }
+}
+
+function startMusic() {
+  if (!musicPlaying) {
+    musicPlaying = true;
+    initMusic();
+  }
+}
+
+function stopMusic() {
+  musicPlaying = false;
+  musicIndex = 0;
+  musicTimer = 0;
 }
