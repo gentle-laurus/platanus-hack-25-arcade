@@ -50,7 +50,7 @@ const GAP_INTERVAL = 5;
 let player, graphics, scoreText, speedText;
 let tracks = [], segments = [], obstacles = [], powerups = [];
 let currentTrack = Math.floor(NUM_TRACKS / 2);
-let score = 0, speed = 1.5, baseSpeed = 3.5;
+let score = 0, speed = 3.0, baseSpeed = 3.0;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
 let bgScrollOffset = 0; // Smooth background scrolling
@@ -67,7 +67,8 @@ let boostTimer = 0, boostActive = false;
 let particles = [];
 let playerFalling = false;
 let playerVY = 0;
-let maxSpeed = 20.5;
+let gameTime = 0; // Track elapsed game time for speed progression
+let lastScoreTime = 0; // Track when last 5-second bonus was awarded
 let highScores = [];
 let enteringName = false;
 let playerName = ['A', 'A', 'A'];
@@ -288,6 +289,7 @@ function update(_time, delta) {
       } else {
         countdownText.setVisible(false);
         gameActive = true;
+        lastScoreTime = 0; // Initialize scoring timer when game becomes active
         if (countdownText) {
           countdownText.destroy();
           countdownText = null;
@@ -323,16 +325,28 @@ function update(_time, delta) {
     return;
   }
   
-  // Update boost
+  // Time-based speed increase (only when game is active)
+  if (gameActive) {
+    gameTime += dt;
+    // Increase baseSpeed gradually over time: 0.15 units per second
+    // This gives a smooth progression that gets harder but remains playable
+    baseSpeed += dt * 0.15;
+  }
+  
+  // Update boost and apply speed
   if (boostActive) {
     boostTimer -= dt;
+    // Continuously update speed to be 10% above current baseSpeed
+    speed = baseSpeed * 1.1;
     if (boostTimer <= 0) {
       boostActive = false;
-      speed = baseSpeed;
-
-      boostActive = false;
+      // Update baseSpeed to current boosted speed so speed never decreases
+      baseSpeed = speed;
       speedText.setColor('#ffaa00');
     }
+  } else if (gameActive) {
+    // Apply baseSpeed when not in boost mode
+    speed = baseSpeed;
   }
   
   // Handle falling
@@ -457,16 +471,16 @@ function update(_time, delta) {
       return true;
     });
     
-    // Update score
-    score += Math.floor(speed * dt * 8);
+    // Update score every 5 seconds: 5 + floor(speed/2)
+    lastScoreTime += dt;
+    if (lastScoreTime >= 5.0) {
+      const bonus = 5 + Math.floor(speed / 2);
+      score += bonus;
+      lastScoreTime = 0; // Reset timer
+    }
+    
     scoreText.setText('TX DATA: ' + score + ' B');
     speedText.setText('TX RATE: ' + speed.toFixed(1) + 'x');
-    
-    // Increase difficulty
-    if (score % 600 < 10 && baseSpeed < 8) {
-      baseSpeed += 0.005;
-      if (!boostActive) speed = baseSpeed;
-    }
   }
   
   // Update particles
@@ -560,10 +574,10 @@ function spawnSegment() {
 // POWERUP COLLECTION
 // =============================================================================
 function collectPowerup(pow, scene) {
-  score += 50;
+  score += 30;
   boostActive = true;
-  boostTimer = 3;
-  speed = baseSpeed * 1.6;
+  boostTimer = 1;
+  speed = baseSpeed * 1.2; // 20% speed increase
   speedText.setColor('#00ff00');
   
   createParticles(pow.x, pow.y, '#00ffff', 16);
@@ -1432,9 +1446,10 @@ function restartGame(scene) {
   nameInputText = null;
   nameCursor = null;
   score = 0;
-  speed = 1.5;
-  baseSpeed = 1.5;
-  maxSpeed = 1.5;
+  speed = 3.0;
+  baseSpeed = 3.0;
+  gameTime = 0;
+  lastScoreTime = 0;
   currentTrack = Math.floor(NUM_TRACKS / 2);
   segments = [];
   obstacles = [];
