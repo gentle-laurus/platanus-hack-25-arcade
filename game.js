@@ -147,7 +147,7 @@ function create() {
     strokeThickness: 3
   }).setOrigin(0.5);
   
-  startPrompt = scene.add.text(400, 500, 'Press ENTER to begin', {
+  startPrompt = scene.add.text(400, 500, '<Press ENTER to begin>', {
     fontSize: '26px',
     fontFamily: 'monospace',
     color: '#00ff00',
@@ -960,7 +960,7 @@ function showGameOver(scene) {
     strokeThickness: 4
   }).setOrigin(0.5);
   
-  continuePrompt =scene.add.text(400, 420, 'Press ENTER to continue', {
+  continuePrompt =scene.add.text(400, 420, '<Press ENTER to continue>', {
     fontSize: '26px',
     fontFamily: 'monospace',
     color: '#00ff00',
@@ -1133,7 +1133,7 @@ function showScoreboard(scene, justSubmitted) {
     color: '#00ffff',
     stroke: '#ff6600',
     strokeThickness: 6
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(1000);
   
   if (highScores.length === 0) {
     scene.add.text(400, 300, 'No scores yet!\nBe the first!', {
@@ -1143,8 +1143,10 @@ function showScoreboard(scene, justSubmitted) {
       align: 'center',
       stroke: '#000',
       strokeThickness: 3
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(1000);
   } else {
+    let newEntryTexts = null;
+    
     highScores.forEach((entry, i) => {
       const y = 210 + i * 50;
       const isNew = justSubmitted && entry.score === score && entry.name === playerName.join('');
@@ -1158,7 +1160,7 @@ function showScoreboard(scene, justSubmitted) {
         color: '#00ffff',
         stroke: '#000',
         strokeThickness: 3
-      });
+      }).setDepth(1000);
       
       const nameText = scene.add.text(320, y, entry.name, {
         fontSize: '28px',
@@ -1166,7 +1168,7 @@ function showScoreboard(scene, justSubmitted) {
         color: nameColor,
         stroke: '#000',
         strokeThickness: 3
-      });
+      }).setDepth(1000);
       
       const scoreText = scene.add.text(600, y, entry.score.toString(), {
         fontSize: '28px',
@@ -1174,17 +1176,32 @@ function showScoreboard(scene, justSubmitted) {
         color: scoreColor,
         stroke: '#000',
         strokeThickness: 3
-      }).setOrigin(1, 0);
+      }).setOrigin(1, 0).setDepth(1000);
+      
+      if (isNew) {
+        newEntryTexts = [rankText, nameText, scoreText];
+      }
     });
+
+    if (newEntryTexts) {
+      scene.tweens.add({
+        targets: newEntryTexts,
+        scale: { from: 1, to: 1.1 },
+        duration: 500,
+        yoyo: true,
+        repeat: -1
+      });
+    }
+    
   }
   
-  const restartTxt = scene.add.text(400, 515, 'Press ENTER to return to menu', {
+  const restartTxt = scene.add.text(400, 515, '<Press ENTER to return to menu>', {
     fontSize: '24px',
     fontFamily: 'monospace',
     color: '#00ff00',
     stroke: '#000',
     strokeThickness: 3
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(1000);
   
   scene.tweens.add({
     targets: restartTxt,
