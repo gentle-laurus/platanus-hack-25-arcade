@@ -131,7 +131,7 @@ function create() {
     strokeThickness: 8
   }).setOrigin(0.5);
   
-  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect ⚡ for Tx Rate boost\nAvoid ✱ explosions and R/C!', {
+  instructText = scene.add.text(400, 320, 'Navigate a living circuit at light speed!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect blue ⚡ for Tx Rate boost\nAvoid ✱ explosions and R/C!', {
     fontSize: '22px',
     fontFamily: 'monospace',
     color: '#ffaa00',
@@ -1358,9 +1358,20 @@ function showNameEntry(scene) {
     strokeThickness: 3
   }).setOrigin(0.5);
   
-  // Cursor indicator
+  // Cursor indicator - calculate position based on actual text bounds
   const cursorY = 420;
-  const cursorX = 340 + nameIndex * 40;
+  // Measure character width using a temporary text object
+  const tempChar = scene.add.text(0, 0, 'A', {
+    fontSize: '72px',
+    fontFamily: 'monospace'
+  });
+  const charWidth = tempChar.width;
+  tempChar.destroy();
+  
+  // Calculate cursor position: text center (400) - half total width + (index + 0.5) * charWidth
+  const totalWidth = charWidth * 3;
+  const leftEdge = 400 - totalWidth / 2;
+  const cursorX = leftEdge + (nameIndex + 0.5) * charWidth;
   nameCursor = scene.add.text(cursorX, cursorY, '▲', {
     fontSize: '32px',
     fontFamily: 'monospace',
@@ -1383,8 +1394,19 @@ function updateNameDisplay() {
 }
 
 function updateCursorPosition() {
-  if (nameCursor) {
-    const cursorX = 340 + nameIndex * 40;
+  if (nameCursor && nameInputText) {
+    // Measure character width using a temporary text object
+    const tempChar = sceneRef.add.text(0, 0, 'A', {
+      fontSize: '72px',
+      fontFamily: 'monospace'
+    });
+    const charWidth = tempChar.width;
+    tempChar.destroy();
+    
+    // Calculate cursor position: text center (400) - half total width + (index + 0.5) * charWidth
+    const totalWidth = charWidth * 3;
+    const leftEdge = 400 - totalWidth / 2;
+    const cursorX = leftEdge + (nameIndex + 0.5) * charWidth;
     nameCursor.setX(cursorX);
   }
 }
