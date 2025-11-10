@@ -281,11 +281,11 @@ function update(_time, delta) {
       let displayText = '';
       let showGo = false;
       
-      if (countdownTimer > 0.75) {
+      if (countdownTimer > 0.9) {
         displayText = '3';
-      } else if (countdownTimer > 0.5) {
+      } else if (countdownTimer > 0.6) {
         displayText = '2';
-      } else if (countdownTimer > 0.25) {
+      } else if (countdownTimer > 0.3) {
         displayText = '1';
       } else if (countdownTimer > 0) {
         displayText = 'GO!';
@@ -971,8 +971,8 @@ function drawChip(g, x, y, width, height, scale = 1) {
 function drawTitleScreen() {
   graphics.clear();
   drawCircuitBoard(graphics, bgScrollOffset);
-  drawCapacitor(graphics, 300, 400, 1.2);
-  drawResistor(graphics, 500, 400, 1.2);
+  // drawCapacitor(graphics, 300, 400, 1.2);
+  // drawResistor(graphics, 500, 400, 1.2);
 }
 
 function drawGame() {
@@ -1158,7 +1158,7 @@ function startGame(scene) {
   speedText.setVisible(true);
   
   // Start countdown
-  countdownTimer = 1.0;
+  countdownTimer = 1.2;
   countdownText = scene.add.text(400, 300, '3', {
     fontSize: '120px',
     fontFamily: 'monospace',
