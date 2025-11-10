@@ -50,7 +50,7 @@ const GAP_INTERVAL = 5;
 let player, graphics, scoreText, speedText;
 let tracks = [], segments = [], obstacles = [], powerups = [];
 let currentTrack = Math.floor(NUM_TRACKS / 2);
-let score = 0, speed = 3.0, baseSpeed = 3.0;
+let score = 0, speed = 4.0, baseSpeed = 4.0;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
 let bgScrollOffset = 0; // Smooth background scrolling
@@ -128,7 +128,7 @@ function create() {
     strokeThickness: 4
   }).setVisible(false);
   
-  speedText = scene.add.text(16, 50, 'TX RATE: 1.0x', {
+  speedText = scene.add.text(16, 50, 'TX RATE: 4.0x', {
     fontSize: '20px',
     fontFamily: 'monospace',
     color: '#ffaa00',
@@ -1635,8 +1635,8 @@ function restartGame(scene) {
   nameInputText = null;
   nameCursor = null;
   score = 0;
-  speed = 3.0;
-  baseSpeed = 3.0;
+  speed = 4.0;
+  baseSpeed = 4.0;
   gameTime = 0;
   lastScoreTime = 0;
   currentTrack = Math.floor(NUM_TRACKS / 2);
