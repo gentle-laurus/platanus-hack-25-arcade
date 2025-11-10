@@ -74,6 +74,7 @@ let playerName = ['A', 'A', 'A'];
 let nameIndex = 0;
 let nameInputText = null;
 let nameCursor = null;
+let showingGameOver = false;
 
 // =============================================================================
 // CREATE
@@ -218,12 +219,22 @@ function create() {
       return;
     }
     
-    if (gameOver && k === 'START1') {
-      restartGame(scene);
+    if (gameOver) {
+      if (showingGameOver && k === 'START1') {
+        // Transition from game over screen to scoreboard
+        scene.children.removeAll();
+        graphics = scene.add.graphics();
+        showingGameOver = false;
+        showScoreboard(scene, false);
+        return;
+      } else if (!showingGameOver && k === 'START1') {
+        restartGame(scene);
+        return;
+      }
       return;
     }
     
-    if (gameOver || !gameActive) return;
+    if (!gameActive) return;
     
     if (k === 'P1U' && currentTrack > 0 && !playerFalling) {
       currentTrack--;
@@ -885,8 +896,56 @@ function endGame(scene) {
   if (isHighScore) {
     showNameEntry(scene);
   } else {
-    showScoreboard(scene, false);
+    showGameOver(scene);
   }
+}
+
+function showGameOver(scene) {
+  showingGameOver = true;
+  
+  const overlay = scene.add.graphics();
+  overlay.fillStyle(0x000000, 0.85);
+  overlay.fillRect(0, 0, 800, 600);
+  
+  const gameOverTxt = scene.add.text(400, 250, 'GAME OVER', {
+    fontSize: '72px',
+    fontFamily: 'monospace',
+    color: '#ff0000',
+    stroke: '#ffff00',
+    strokeThickness: 8
+  }).setOrigin(0.5);
+  
+  scene.tweens.add({
+    targets: gameOverTxt,
+    scale: { from: 1, to: 1.1 },
+    alpha: { from: 1, to: 0.7 },
+    duration: 700,
+    yoyo: true,
+    repeat: -1
+  });
+  
+  scene.add.text(400, 350, 'SCORE: ' + score, {
+    fontSize: '36px',
+    fontFamily: 'monospace',
+    color: '#00ffff',
+    stroke: '#000',
+    strokeThickness: 4
+  }).setOrigin(0.5);
+  
+  continuePrompt =scene.add.text(400, 420, 'Press ENTER to continue', {
+    fontSize: '26px',
+    fontFamily: 'monospace',
+    color: '#00ff00',
+    stroke: '#000',
+    strokeThickness: 4
+  }).setOrigin(0.5);
+  scene.tweens.add({
+    targets: continuePrompt,
+    alpha: { from: 1, to: 0.3 },
+    duration: 600,
+    yoyo: true,
+    repeat: -1
+  });
 }
 
 function showNameEntry(scene) {
@@ -930,7 +989,7 @@ function showNameEntry(scene) {
     strokeThickness: 6
   }).setOrigin(0.5);
   
-  scene.add.text(400, 460, 'W / S: Change letter\nSpace bar: Confirm', {
+  scene.add.text(400, 490, 'W / S: Change letter\nSpace bar: Confirm', {
     fontSize: '22px',
     fontFamily: 'monospace',
     color: '#888888',
@@ -972,6 +1031,7 @@ function updateCursorPosition() {
 
 function submitScore(scene) {
   enteringName = false;
+  showingGameOver = false;
   const name = playerName.join('');
   
   // Add score to high scores
@@ -984,6 +1044,9 @@ function submitScore(scene) {
   // Clear the name entry screen
   scene.children.removeAll();
   
+  // Recreate graphics object for background drawing
+  graphics = scene.add.graphics();
+  
   // Show scoreboard without restarting
   showScoreboard(scene, true);
 }
@@ -992,25 +1055,6 @@ function showScoreboard(scene, justSubmitted) {
   const overlay = scene.add.graphics();
   overlay.fillStyle(0x000000, 0.85);
   overlay.fillRect(0, 0, 800, 600);
-  
-  const gameOverTxt = scene.add.text(400, 80, justSubmitted ? 'SCORE SAVED!' : 'GAME OVER', {
-    fontSize: '56px',
-    fontFamily: 'monospace',
-    color: justSubmitted ? '#00ff00' : '#ff0000',
-    stroke: '#ffff00',
-    strokeThickness: 6
-  }).setOrigin(0.5);
-  
-  if (!justSubmitted) {
-    scene.tweens.add({
-      targets: gameOverTxt,
-      scale: { from: 1, to: 1.1 },
-      alpha: { from: 1, to: 0.7 },
-      duration: 700,
-      yoyo: true,
-      repeat: -1
-    });
-  }
   
   // High Scores
   scene.add.text(400, 160, '═══ HIGH SCORES ═══', {
@@ -1096,6 +1140,7 @@ function restartGame(scene) {
   gameStarted = false;
   gameActive = false;
   enteringName = false;
+  showingGameOver = false;
   nameInputText = null;
   nameCursor = null;
   score = 0;
