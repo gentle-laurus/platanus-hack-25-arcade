@@ -1087,9 +1087,9 @@ function showScoreboard(scene, justSubmitted) {
   // Draw chip component at top center
   const chipGraphics = scene.add.graphics();
   const chipX = 400;
-  const chipY = 60;
-  const chipWidth = 80;
-  const chipHeight = 50;
+  const chipY = 300;
+  const chipWidth = 700;
+  const chipHeight = 520;
   
   // Chip body (dark grey/black)
   chipGraphics.fillStyle(0x1a1a1a, 1);
@@ -1099,29 +1099,29 @@ function showScoreboard(scene, justSubmitted) {
   
   // Pins on all sides
   chipGraphics.fillStyle(0x8a8a8a, 1);
-  const pinLength = 6;
-  const pinSpacing = 8;
+  const pinLength = 15;
+  const pinSpacing = 15;
   
   // Top pins
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 47; i++) {
     const pinX = chipX - chipWidth/2 + 8 + i * pinSpacing;
     chipGraphics.fillRect(pinX - 2, chipY - chipHeight/2 - pinLength, 4, pinLength);
   }
   
   // Bottom pins
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 47; i++) {
     const pinX = chipX - chipWidth/2 + 8 + i * pinSpacing;
     chipGraphics.fillRect(pinX - 2, chipY + chipHeight/2, 4, pinLength);
   }
   
   // Left pins
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 35; i++) {
     const pinY = chipY - chipHeight/2 + 8 + i * pinSpacing;
     chipGraphics.fillRect(chipX - chipWidth/2 - pinLength, pinY - 2, pinLength, 4);
   }
   
   // Right pins
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 35; i++) {
     const pinY = chipY - chipHeight/2 + 8 + i * pinSpacing;
     chipGraphics.fillRect(chipX + chipWidth/2, pinY - 2, pinLength, 4);
   }
