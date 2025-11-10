@@ -54,7 +54,7 @@ let score = 0, combo = 0, speed = 1.5, baseSpeed = 3.5;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
 let bgScrollOffset = 0; // Smooth background scrolling
-let titleText, instructText, startPrompt;
+let titleText, instructText, startPrompt, capacitorText;
 let sceneRef = null;
 let inputTexts = {};
 let countdownText = null;
@@ -170,6 +170,16 @@ function create() {
     yoyo: true,
     repeat: -1
   });
+  
+  // Capacitor text (positioned to the right of the capacitor)
+  capacitorText = scene.add.text(470, 400, '2500uF\n25V', {
+    fontSize: '16px',
+    fontFamily: 'monospace',
+    color: '#000000',
+    align: 'center',
+    stroke: '#7dd3c0',
+    strokeThickness: 2
+  }).setOrigin(0.5).setRotation(-Math.PI / 2);
   
   // Initialize segments
   for (let i = 0; i < 8; i++) {
@@ -711,12 +721,274 @@ function drawCircuitBoard(g, offset) {
   }
 }
 
+function drawCircuitCables(g, chipX, chipY, chipWidth, chipHeight, chipScale = 1) {
+  // Copper-colored traces (simulating PCB connections)
+  // Aligned to the 40-pixel grid
+  const GRID_SIZE = 40;
+  g.lineStyle(2, 0xb87333, 0.7); // Copper color
+  
+  // Create a deterministic but random-looking pattern using seeded positions
+  const seed = 12345; // Fixed seed for consistent pattern
+  let r = seed;
+  
+  // Simple seeded random function
+  function seededRandom() {
+    r = (r * 1103515245 + 12345) & 0x7fffffff;
+    return (r >>> 0) / 0x7fffffff;
+  }
+  
+  // Helper to snap to grid
+  function snapToGrid(val) {
+    return Math.floor(val / GRID_SIZE) * GRID_SIZE;
+  }
+  
+  // Calculate chip pin positions (matching drawChip logic)
+  const pinLength = 15 * chipScale;
+  const pinSpacing = 15 * chipScale;
+  const pinWidth = 4 * chipScale;
+  const pinOffset = 8 * chipScale;
+  const topBottomPins = Math.floor((chipWidth - pinOffset * 2) / pinSpacing);
+  const leftRightPins = Math.floor((chipHeight - pinOffset * 2) / pinSpacing);
+  
+  const chipPins = [];
+  
+  // Top pins
+  for (let i = 0; i < topBottomPins; i++) {
+    const pinX = chipX - chipWidth/2 + pinOffset + i * pinSpacing;
+    const pinY = chipY - chipHeight/2 - pinLength;
+    chipPins.push({ x: pinX, y: pinY, side: 'top' });
+  }
+  
+  // Bottom pins
+  for (let i = 0; i < topBottomPins; i++) {
+    const pinX = chipX - chipWidth/2 + pinOffset + i * pinSpacing;
+    const pinY = chipY + chipHeight/2 + pinLength;
+    chipPins.push({ x: pinX, y: pinY, side: 'bottom' });
+  }
+  
+  // Left pins
+  for (let i = 0; i < leftRightPins; i++) {
+    const pinX = chipX - chipWidth/2 - pinLength;
+    const pinY = chipY - chipHeight/2 + pinOffset + i * pinSpacing;
+    chipPins.push({ x: pinX, y: pinY, side: 'left' });
+  }
+  
+  // Right pins
+  for (let i = 0; i < leftRightPins; i++) {
+    const pinX = chipX + chipWidth/2 + pinLength;
+    const pinY = chipY - chipHeight/2 + pinOffset + i * pinSpacing;
+    chipPins.push({ x: pinX, y: pinY, side: 'right' });
+  }
+  
+  // Draw traces extending from each pin following the grid
+  for (let i = 0; i < chipPins.length; i++) {
+    const pin = chipPins[i];
+    
+    // Determine direction based on pin side
+    let extendX = 0;
+    let extendY = 0;
+    let length = 0;
+    
+    if (pin.side === 'top') {
+      // Extend upward (negative Y)
+      extendY = -1;
+      length = 40 + seededRandom() * 200; // Vary length
+    } else if (pin.side === 'bottom') {
+      // Extend downward (positive Y)
+      extendY = 1;
+      length = 40 + seededRandom() * 200;
+    } else if (pin.side === 'left') {
+      // Extend leftward (negative X)
+      extendX = -1;
+      length = 40 + seededRandom() * 200;
+    } else if (pin.side === 'right') {
+      // Extend rightward (positive X)
+      extendX = 1;
+      length = 40 + seededRandom() * 200;
+    }
+    
+    // Calculate end point - keep the non-extending coordinate exactly the same for straight lines
+    let endX, endY;
+    
+    if (extendX !== 0) {
+      // Extending horizontally - keep Y exactly the same, snap X to grid
+      endX = snapToGrid(pin.x + extendX * length);
+      endY = pin.y; // Keep Y exactly the same as pin
+    } else {
+      // Extending vertically - keep X exactly the same, snap Y to grid
+      endX = pin.x; // Keep X exactly the same as pin
+      endY = snapToGrid(pin.y + extendY * length);
+    }
+    
+    // Draw perfectly straight line from pin to grid point
+    g.lineBetween(pin.x, pin.y, endX, endY);
+    
+    // Sometimes extend further with a turn (L-shaped)
+    if (seededRandom() > 0.5) {
+      let turnX, turnY;
+      
+      if (extendX !== 0) {
+        // Was horizontal, now turn vertical - keep X exactly the same
+        turnX = endX; // Keep X exactly the same
+        const turnDir = seededRandom() > 0.5 ? 1 : -1;
+        turnY = snapToGrid(endY + turnDir * (40 + seededRandom() * 120));
+      } else {
+        // Was vertical, now turn horizontal - keep Y exactly the same
+        const turnDir = seededRandom() > 0.5 ? 1 : -1;
+        turnX = snapToGrid(endX + turnDir * (40 + seededRandom() * 120));
+        turnY = endY; // Keep Y exactly the same
+      }
+      
+      // Draw perfectly straight second segment
+      g.lineBetween(endX, endY, turnX, turnY);
+      
+      // Draw pad at end
+      if (seededRandom() > 0.3) {
+        g.fillStyle(0xaa8844, 0.8);
+        g.fillCircle(turnX, turnY, 4);
+      }
+    } else {
+      // Draw pad at straight end
+      if (seededRandom() > 0.3) {
+        g.fillStyle(0xaa8844, 0.8);
+        g.fillCircle(endX, endY, 4);
+      }
+    }
+  }
+}
+
+function drawCapacitor(g, x, y, scale = 1) {
+  const w = 60 * scale;
+  const h = 80 * scale;
+  const r = w / 2;
+  
+  // Cylinder body (light blue-green)
+  g.fillStyle(0x7dd3c0, 1);
+  g.fillEllipse(x, y - h/2, w, h * 0.3);
+  g.fillRect(x - r, y - h/2, w, h);
+  g.fillEllipse(x, y + h/2, w, h * 0.3);
+  
+  // Orange stripe
+  g.fillStyle(0xff6600, 1);
+  const stripeWidth = w * 0.2;
+  const stripeX = x - r + w * 0.15;
+  g.fillRect(stripeX, y - h/2, stripeWidth, h);
+  
+  // White top
+  g.fillStyle(0xffffff, 1);
+  g.fillEllipse(x, y - h/2, w * 0.9, h * 0.25);
+  
+  // Black cross on top
+  g.lineStyle(3, 0x000000, 1);
+  const crossSize = w * 0.3;
+  g.lineBetween(x - crossSize/2, y - h/2, x + crossSize/2, y - h/2);
+  g.lineBetween(x, y - h/2 - crossSize/2, x, y - h/2 + crossSize/2);
+  
+  // Silver leads
+  g.fillStyle(0xc0c0c0, 1);
+  const leadWidth = 3 * scale;
+  const leadLength = 15 * scale;
+  const leadSpacing = 12 * scale;
+  g.fillRect(x - leadSpacing/2 - leadWidth/2, y + h/2, leadWidth, leadLength);
+  g.fillRect(x + leadSpacing/2 - leadWidth/2, y + h/2, leadWidth, leadLength);
+}
+
+function drawResistor(g, x, y, scale = 1) {
+  const bodyLength = 60 * scale;
+  const bodyRadius = 8 * scale;
+  const leadLength = 25 * scale;
+  
+  // Silver leads (left and right)
+  g.fillStyle(0xc0c0c0, 1);
+  g.fillRect(x - bodyLength/2 - leadLength, y - 1 * scale, leadLength, 2 * scale);
+  g.fillRect(x + bodyLength/2, y - 1 * scale, leadLength, 2 * scale);
+  
+  // Resistor body (light beige/tan, slightly bulbous)
+  // Draw as an ellipse to create the bulbous effect
+  g.fillStyle(0xd4c4a8, 1);
+  g.fillEllipse(x, y, bodyLength, bodyRadius * 2.2);
+  
+  // Subtle shading (darker on bottom-right)
+  g.fillStyle(0xc4b498, 0.4);
+  g.fillEllipse(x + bodyLength * 0.1, y + bodyRadius * 0.3, bodyLength * 0.8, bodyRadius * 1.8);
+  
+  // Color bands (from left to right)
+  const bandWidth = 4 * scale;
+  const bandSpacing = bodyLength / 5;
+  
+  // First band: Yellow
+  g.fillStyle(0xffff00, 1);
+  g.fillRect(x - bodyLength/2 + bandSpacing * 0.5, y - bodyRadius, bandWidth, bodyRadius * 2);
+  
+  // Second band: Purple/Violet
+  g.fillStyle(0x800080, 1);
+  g.fillRect(x - bodyLength/2 + bandSpacing * 1.2, y - bodyRadius, bandWidth, bodyRadius * 2);
+  
+  // Third band: Orange
+  g.fillStyle(0xff6600, 1);
+  g.fillRect(x - bodyLength/2 + bandSpacing * 1.9, y - bodyRadius, bandWidth, bodyRadius * 2);
+  
+  // Fourth band (Tolerance): Gold (wider, closer to right end)
+  g.fillStyle(0xffd700, 1);
+  g.fillRect(x + bodyLength/2 - bandSpacing * 0.8, y - bodyRadius, bandWidth * 1.3, bodyRadius * 2);
+  
+  // Highlight on top-left (lighting effect)
+  g.fillStyle(0xe4d4b8, 0.5);
+  g.fillEllipse(x - bodyLength * 0.2, y - bodyRadius * 0.5, bodyLength * 0.6, bodyRadius * 1.2);
+}
+
+function drawChip(g, x, y, width, height, scale = 1) {
+  const pinLength = 15 * scale;
+  const pinSpacing = 15 * scale;
+  const pinWidth = 4 * scale;
+  const pinOffset = 8 * scale;
+  
+  // Chip body (dark grey/black)
+  g.fillStyle(0x1a1a1a, 1);
+  g.fillRect(x - width/2, y - height/2, width, height);
+  g.lineStyle(2 * scale, 0x4a4a4a, 1);
+  g.strokeRect(x - width/2, y - height/2, width, height);
+  
+  // Calculate number of pins based on dimensions
+  const topBottomPins = Math.floor((width - pinOffset * 2) / pinSpacing);
+  const leftRightPins = Math.floor((height - pinOffset * 2) / pinSpacing);
+  
+  // Pins on all sides
+  g.fillStyle(0x8a8a8a, 1);
+  
+  // Top pins
+  for (let i = 0; i < topBottomPins; i++) {
+    const pinX = x - width/2 + pinOffset + i * pinSpacing;
+    g.fillRect(pinX - pinWidth/2, y - height/2 - pinLength, pinWidth, pinLength);
+  }
+  
+  // Bottom pins
+  for (let i = 0; i < topBottomPins; i++) {
+    const pinX = x - width/2 + pinOffset + i * pinSpacing;
+    g.fillRect(pinX - pinWidth/2, y + height/2, pinWidth, pinLength);
+  }
+  
+  // Left pins
+  for (let i = 0; i < leftRightPins; i++) {
+    const pinY = y - height/2 + pinOffset + i * pinSpacing;
+    g.fillRect(x - width/2 - pinLength, pinY - pinWidth/2, pinLength, pinWidth);
+  }
+  
+  // Right pins
+  for (let i = 0; i < leftRightPins; i++) {
+    const pinY = y - height/2 + pinOffset + i * pinSpacing;
+    g.fillRect(x + width/2, pinY - pinWidth/2, pinLength, pinWidth);
+  }
+}
+
 // =============================================================================
 // DRAWING
 // =============================================================================
 function drawTitleScreen() {
   graphics.clear();
   drawCircuitBoard(graphics, bgScrollOffset);
+  drawCapacitor(graphics, 300, 400, 1.2);
+  drawResistor(graphics, 500, 400, 1.2);
 }
 
 function drawGame() {
@@ -897,6 +1169,7 @@ function startGame(scene) {
   titleText.destroy();
   instructText.destroy();
   startPrompt.destroy();
+  if (capacitorText) capacitorText.destroy();
   scoreText.setVisible(true);
   speedText.setVisible(true);
   comboText.setVisible(true);
@@ -1090,41 +1363,13 @@ function showScoreboard(scene, justSubmitted) {
   const chipY = 300;
   const chipWidth = 700;
   const chipHeight = 520;
+  const chipScale = 1;
   
-  // Chip body (dark grey/black)
-  chipGraphics.fillStyle(0x1a1a1a, 1);
-  chipGraphics.fillRect(chipX - chipWidth/2, chipY - chipHeight/2, chipWidth, chipHeight);
-  chipGraphics.lineStyle(2, 0x4a4a4a, 1);
-  chipGraphics.strokeRect(chipX - chipWidth/2, chipY - chipHeight/2, chipWidth, chipHeight);
+  // Draw circuit cables connecting from chip pins
+  drawCircuitCables(bgGraphics, chipX, chipY, chipWidth, chipHeight, chipScale);
   
-  // Pins on all sides
-  chipGraphics.fillStyle(0x8a8a8a, 1);
-  const pinLength = 15;
-  const pinSpacing = 15;
-  
-  // Top pins
-  for (let i = 0; i < 47; i++) {
-    const pinX = chipX - chipWidth/2 + 8 + i * pinSpacing;
-    chipGraphics.fillRect(pinX - 2, chipY - chipHeight/2 - pinLength, 4, pinLength);
-  }
-  
-  // Bottom pins
-  for (let i = 0; i < 47; i++) {
-    const pinX = chipX - chipWidth/2 + 8 + i * pinSpacing;
-    chipGraphics.fillRect(pinX - 2, chipY + chipHeight/2, 4, pinLength);
-  }
-  
-  // Left pins
-  for (let i = 0; i < 35; i++) {
-    const pinY = chipY - chipHeight/2 + 8 + i * pinSpacing;
-    chipGraphics.fillRect(chipX - chipWidth/2 - pinLength, pinY - 2, pinLength, 4);
-  }
-  
-  // Right pins
-  for (let i = 0; i < 35; i++) {
-    const pinY = chipY - chipHeight/2 + 8 + i * pinSpacing;
-    chipGraphics.fillRect(chipX + chipWidth/2, pinY - 2, pinLength, 4);
-  }
+  // Draw chip on top
+  drawChip(chipGraphics, chipX, chipY, chipWidth, chipHeight, chipScale);
   
   // High Scores
   highScoreText = scene.add.text(400, 120, '═══ HIGH SCORES ═══', {
