@@ -1252,14 +1252,15 @@ function startGame(scene) {
 
 function endGame(scene) {
   gameOver = true;
-  playTone(scene, 220, 0.5);
   
   // Check if score qualifies for top 5
   const isHighScore = (highScores.length < 5 || score > highScores[4].score) && score > 0;
   
   if (isHighScore) {
+    playHighScoreSound(scene);
     showNameEntry(scene);
   } else {
+    playGameOverSound(scene);
     showGameOver(scene);
   }
 }
@@ -1594,4 +1595,60 @@ function playTone(scene, freq, dur) {
   
   osc.start(ctx.currentTime);
   osc.stop(ctx.currentTime + dur);
+}
+
+function playGameOverSound(scene) {
+  const ctx = scene.sound.context;
+  const now = ctx.currentTime;
+  
+  // Classic game over jingle: descending notes (G-E-C)
+  // Frequencies: G4=392, E4=330, C4=262
+  const notes = [392, 330, 262];
+  const noteDuration = 0.25;
+  
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    
+    const startTime = now + i * noteDuration;
+    gain.gain.setValueAtTime(0.15, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, startTime + noteDuration);
+    
+    osc.start(startTime);
+    osc.stop(startTime + noteDuration);
+  });
+}
+
+function playHighScoreSound(scene) {
+  const ctx = scene.sound.context;
+  const now = ctx.currentTime;
+  
+  // Salutation/fanfare: ascending notes (C-E-G-C) - a positive, celebratory sound
+  // Frequencies: C4=262, E4=330, G4=392, C5=523
+  const notes = [262, 330, 392, 523];
+  const noteDuration = 0.15;
+  
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    
+    const startTime = now + i * noteDuration;
+    gain.gain.setValueAtTime(0.18, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, startTime + noteDuration);
+    
+    osc.start(startTime);
+    osc.stop(startTime + noteDuration);
+  });
 }
