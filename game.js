@@ -532,24 +532,36 @@ function spawnSegment() {
   lastGapTracks = currentGapTracks;
   
   // Spawn obstacles (explosions) rarely
+  let obstacleTrackIdx = null;
   if (Math.random() > 0.8) {
-    const trackIdx = Math.floor(Math.random() * NUM_TRACKS);
+    obstacleTrackIdx = Math.floor(Math.random() * NUM_TRACKS);
     obstacles.push({
       x: x + SEGMENT_WIDTH / 2,
-      y: tracks[trackIdx].y,
+      y: tracks[obstacleTrackIdx].y,
       size: 20,
       pulse: 0
     });
   }
   
   // Spawn powerups (lightning) occasionally
+  // Exclude the track where an obstacle spawned to prevent overlap
   if (Math.random() > 0.85) {
-    const trackIdx = Math.floor(Math.random() * NUM_TRACKS);
-    powerups.push({
-      x: x + SEGMENT_WIDTH / 2,
-      y: tracks[trackIdx].y,
-      angle: 0
-    });
+    const availableTracks = [];
+    for (let i = 0; i < NUM_TRACKS; i++) {
+      if (i !== obstacleTrackIdx) {
+        availableTracks.push(i);
+      }
+    }
+    
+    // Only spawn powerup if there are available tracks
+    if (availableTracks.length > 0) {
+      const trackIdx = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+      powerups.push({
+        x: x + SEGMENT_WIDTH / 2,
+        y: tracks[trackIdx].y,
+        angle: 0
+      });
+    }
   }
 }
 
