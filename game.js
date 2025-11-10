@@ -1127,21 +1127,13 @@ function showScoreboard(scene, justSubmitted) {
   }
   
   // High Scores
-  highScoreText = scene.add.text(400, 160, '═══ HIGH SCORES ═══', {
+  highScoreText = scene.add.text(400, 120, '═══ HIGH SCORES ═══', {
     fontSize: '54px',
     fontFamily: 'monospace',
     color: '#00ffff',
     stroke: '#ff6600',
     strokeThickness: 6
   }).setOrigin(0.5);
-
-  scene.tweens.add({
-    targets: highScoreText,
-    scale: { from: 1, to: 1.05 },
-    duration: 800,
-    yoyo: true,
-    repeat: -1
-  });
   
   if (highScores.length === 0) {
     scene.add.text(400, 300, 'No scores yet!\nBe the first!', {
@@ -1154,7 +1146,7 @@ function showScoreboard(scene, justSubmitted) {
     }).setOrigin(0.5);
   } else {
     highScores.forEach((entry, i) => {
-      const y = 230 + i * 50;
+      const y = 210 + i * 50;
       const isNew = justSubmitted && entry.score === score && entry.name === playerName.join('');
       const nameColor = isNew ? '#ffff00' : '#ffaa00';
       const scoreColor = isNew ? '#ffff00' : '#ffaa00';
@@ -1186,7 +1178,7 @@ function showScoreboard(scene, justSubmitted) {
     });
   }
   
-  const restartTxt = scene.add.text(400, 530, 'Press ENTER to return to menu', {
+  const restartTxt = scene.add.text(400, 515, 'Press ENTER to return to menu', {
     fontSize: '24px',
     fontFamily: 'monospace',
     color: '#00ff00',
@@ -1222,7 +1214,7 @@ function restartGame(scene) {
   obstacles = [];
   powerups = [];
   particles = [];
-  lastSegmentX = 100; // Start segments after INPUT circles
+  lastSegmentX = 0;
   segmentCounter = 0;
   lastGapTracks = [];
   boostTimer = 0;
