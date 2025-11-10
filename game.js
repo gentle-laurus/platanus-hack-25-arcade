@@ -257,7 +257,11 @@ function update(_time, delta) {
   const dt = delta / 1000;
   
   // Update background scroll (smooth continuous scrolling)
-  bgScrollOffset += speed * dt * 100;
+  if (!gameStarted) {
+    bgScrollOffset += speed * dt * 30; // Slower for title screen
+  } else {
+    bgScrollOffset += speed * dt * 100;
+  }
   
   // Update grid animation
   gridOffset += speed * 2;
