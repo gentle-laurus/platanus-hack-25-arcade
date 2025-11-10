@@ -86,6 +86,10 @@ let titleMusicTimer = 0;
 let titleMusicPattern = [];
 let titleMusicIndex = 0;
 let titleMusicLoopCount = 0;
+let scoreboardMusicPlaying = false;
+let scoreboardMusicTimer = 0;
+let scoreboardMusicPattern = [];
+let scoreboardMusicIndex = 0;
 
 // =============================================================================
 // CREATE
@@ -280,7 +284,7 @@ function update(_time, delta) {
   
   // Update background music (gameplay, title screen, or scoreboard)
   if (showingScoreboard) {
-    updateTitleMusic(this, dt);
+    updateScoreboardMusic(this, dt);
   } else if (!gameStarted) {
     updateTitleMusic(this, dt);  // Title screen music
   } else if (gameStarted) {
@@ -1476,7 +1480,8 @@ function submitScore(scene) {
 function showScoreboard(scene, justSubmitted) {
   showingScoreboard = true;
   stopMusic();
-  startTitleMusic();
+  stopTitleMusic();
+  startScoreboardMusic();
   // Best effort: ensure audio context is running
   const _ctx = scene.sound.context;
   if (_ctx && _ctx.state !== 'running' && _ctx.resume) {
@@ -1620,6 +1625,7 @@ function restartGame(scene) {
   bgScrollOffset = 0;
   stopMusic();
   stopTitleMusic();
+  stopScoreboardMusic();
 }
 
 // =============================================================================
@@ -1702,19 +1708,27 @@ function playHighScoreSound(scene) {
 let musicLoopCount = 0; // ← new counter
 
 function initMusic() {
-  const V = 0.05;
-  const S = 0.14;
+  const V = 0.15;
+  const S = 0.35;   // Use same glitchy pattern as title music
 
+  // Random glitchy computer sounds - corrupted data patterns
+  // Frequencies jump around unpredictably like system errors
   musicPattern = [
-    // C minor → Ab → G minor
-    [ 65, S, V], [156, S, V], [196, S, V], [262, S, V],
-    [ 65, S, V], [156, S, V], [208, S, V], [262, S, V],
-
-    [104, S, V], [208, S, V], [262, S, V], [311, S, V],
-    [104, S, V], [208, S, V], [262, S, V], [311, S, V],
-
-    [ 98, S, V], [196, S, V], [233, S, V], [294, S, V],
-    [ 98, S, V], [196, S, V], [233, S, V], [294, S, V],
+    // Glitch burst 1
+    [120, S * 0.3, V], [0, S * 0.1, 0], [55, S * 0.4, V], [0, S * 0.15, 0],
+    [340, S * 0.2, V], [0, S * 0.08, 0], [88, S * 0.35, V], [0, S * 0.2, 0],
+    
+    // Data corruption noise
+    [200, S * 0.25, V], [0, S * 0.12, 0], [45, S * 0.3, V], [0, S * 0.18, 0],
+    [280, S * 0.22, V], [0, S * 0.1, 0], [110, S * 0.4, V], [0, S * 0.3, 0],
+    
+    // Random high-frequency glitches
+    [500, S * 0.15, V * 0.8], [0, S * 0.08, 0], [65, S * 0.35, V], [0, S * 0.15, 0],
+    [350, S * 0.2, V], [0, S * 0.1, 0], [92, S * 0.3, V], [0, S * 0.4, 0],
+    
+    // System crash sounds
+    [150, S * 0.4, V * 1.2], [0, S * 0.2, 0], [75, S * 0.25, V], [0, S * 0.15, 0],
+    [420, S * 0.18, V], [0, S * 0.12, 0], [58, S * 0.35, V], [0, S * 0.5, 0]
   ];
 
   musicIndex = 0;
@@ -1734,7 +1748,7 @@ function updateMusic(scene, dt) {
     // Play note immediately when timer reaches duration, then move to next
     if (musicTimer >= dur) {
       if (freq > 0 && vol > 0) {
-        playMusicNote(scene, freq, dur, vol);
+        playTitleMusicNote(scene, freq, dur, vol);  // Use glitchy music for gameplay
       }
       
       musicTimer -= dur; // smoother timing
@@ -1744,60 +1758,8 @@ function updateMusic(scene, dt) {
       if (musicIndex >= musicPattern.length) {
         musicIndex = 0;
         musicLoopCount++;
-
-        if (musicLoopCount % 3 === 0) {
-          setTimeout(() => {
-            playMusicNote(scene, 311, 0.12, 0.08); // Eb4
-            setTimeout(() => playMusicNote(scene, 262, 0.12, 0.07), 130); // C4, 130 ms later
-          }, 40);
-        }
-        
       }
     }
-  }
-}
-
-function playMusicNote(scene, freq, dur, vol) {
-  const ctx = scene.sound.context;
-  const now = ctx.currentTime;
-  
-  // Machine-like industrial beep - harsh, mechanical, no smoothness
-  // Square wave with instant on/off for raw machine sound
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  
-  osc.frequency.value = freq;
-  osc.type = 'square'; // Harsh, mechanical square wave
-  
-  // Instant on/off - like a machine pulse
-  gain.gain.setValueAtTime(vol, now);
-  gain.gain.setValueAtTime(vol, now + dur * 0.95);
-  gain.gain.setValueAtTime(0, now + dur); // Instant cutoff
-  
-  osc.start(now);
-  osc.stop(now + dur);
-  
-  // Add deep machine hum (octave below) - more frequent for industrial feel
-  if (Math.random() > 0.5) {
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    
-    // Deep machine pulse - octave below
-    osc2.frequency.value = freq * 0.5;
-    osc2.type = 'square'; // Harsh machine bass
-    
-    gain2.gain.setValueAtTime(vol * 0.3, now);
-    gain2.gain.setValueAtTime(vol * 0.3, now + dur * 0.95);
-    gain2.gain.setValueAtTime(0, now + dur);
-    
-    osc2.start(now);
-    osc2.stop(now + dur);
   }
 }
 
@@ -1936,4 +1898,71 @@ function stopTitleMusic() {
   titleMusicPlaying = false;
   titleMusicIndex = 0;
   titleMusicTimer = 0;
+}
+
+// =============================================================================
+// SCOREBOARD MUSIC
+// =============================================================================
+function initScoreboardMusic() {
+  const V = 0.12;
+  const S = 0.8;   // Much larger spacing for random PC sounds
+
+  // Sparse random beeps - not music, just random computer sounds
+  // Like a system checking memory or random diagnostic beeps
+  scoreboardMusicPattern = [
+    [210, S * 0.4, V], [0, S * 0.5, 0],
+    [75, S * 0.3, V], [0, S * 0.6, 0],
+    [420, S * 0.35, V * 0.9], [0, S * 0.7, 0],
+    [120, S * 0.4, V], [0, S * 0.8, 0],
+    
+    [340, S * 0.25, V], [0, S * 0.9, 0],
+    [55, S * 0.45, V], [0, S * 0.5, 0],
+    [280, S * 0.3, V], [0, S * 1.0, 0],
+    [150, S * 0.35, V * 1.1], [0, S * 0.6, 0],
+    
+    [500, S * 0.2, V * 0.8], [0, S * 0.8, 0],
+    [88, S * 0.4, V], [0, S * 0.5, 0],
+    [350, S * 0.3, V], [0, S * 0.7, 0],
+    [200, S * 0.35, V], [0, S * 1.2, 0]
+  ];
+
+  scoreboardMusicIndex = 0;
+  scoreboardMusicTimer = 0;
+}
+
+function updateScoreboardMusic(scene, dt) {
+  if (!scoreboardMusicPlaying) return;
+  
+  scoreboardMusicTimer += dt;
+  
+  if (scoreboardMusicIndex < scoreboardMusicPattern.length) {
+    const [freq, dur, vol] = scoreboardMusicPattern[scoreboardMusicIndex];
+    
+    if (scoreboardMusicTimer >= dur) {
+      if (freq > 0 && vol > 0) {
+        playTitleMusicNote(scene, freq, dur, vol);
+      }
+      
+      scoreboardMusicTimer -= dur;
+      scoreboardMusicIndex++;
+      
+      // Loop back to start
+      if (scoreboardMusicIndex >= scoreboardMusicPattern.length) {
+        scoreboardMusicIndex = 0;
+      }
+    }
+  }
+}
+
+function startScoreboardMusic() {
+  if (!scoreboardMusicPlaying) {
+    scoreboardMusicPlaying = true;
+    initScoreboardMusic();
+  }
+}
+
+function stopScoreboardMusic() {
+  scoreboardMusicPlaying = false;
+  scoreboardMusicIndex = 0;
+  scoreboardMusicTimer = 0;
 }
