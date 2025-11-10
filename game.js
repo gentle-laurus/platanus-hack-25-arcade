@@ -1664,32 +1664,27 @@ function playHighScoreSound(scene) {
   });
 }
 
-// =============================================================================
-// BACKGROUND MUSIC - Dark digital PC speaker style (DOS-era inspired)
-// =============================================================================
+let musicLoopCount = 0; // ← new counter
+
 function initMusic() {
-  // Dark, machine-like industrial beeps - repetitive, mechanical, no melody
-  // Format: [frequency, duration, volume]
-  // Very low frequencies for dark, machine-like sound
-  // C2=65, D2=73, Eb2=78, F2=87, G2=98, Ab2=104, Bb2=117
-  // C3=131, Eb3=156, F3=175, Ab3=208
-  // Repetitive, pulsing pattern like a machine or circuit board
+  const V = 0.05;
+  const S = 0.14;
+
   musicPattern = [
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05],
-    [98, 0.15, 0.05], [117, 0.15, 0.05], [98, 0.15, 0.05], [131, 0.15, 0.05],
-    [98, 0.15, 0.05], [117, 0.15, 0.05], [98, 0.15, 0.05], [156, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05],
-    [78, 0.2, 0.06], [87, 0.15, 0.05], [98, 0.15, 0.05], [104, 0.15, 0.05],
-    [117, 0.15, 0.05], [131, 0.15, 0.05], [156, 0.15, 0.05], [175, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [175, 0.15, 0.05],
-    [131, 0.15, 0.05], [156, 0.15, 0.05], [131, 0.15, 0.05], [208, 0.15, 0.05]
+    // C minor → Ab → G minor
+    [ 65, S, V], [156, S, V], [196, S, V], [262, S, V],
+    [ 65, S, V], [156, S, V], [208, S, V], [262, S, V],
+
+    [104, S, V], [208, S, V], [262, S, V], [311, S, V],
+    [104, S, V], [208, S, V], [262, S, V], [311, S, V],
+
+    [ 98, S, V], [196, S, V], [233, S, V], [294, S, V],
+    [ 98, S, V], [196, S, V], [233, S, V], [294, S, V],
   ];
+
   musicIndex = 0;
   musicTimer = 0;
+  musicLoopCount = 0; // reset
 }
 
 function updateMusic(scene, dt) {
@@ -1707,12 +1702,21 @@ function updateMusic(scene, dt) {
         playMusicNote(scene, freq, dur, vol);
       }
       
-      musicTimer -= dur; // Subtract duration instead of resetting to 0 for smoother timing
+      musicTimer -= dur; // smoother timing
       musicIndex++;
       
       // Loop back to start
       if (musicIndex >= musicPattern.length) {
         musicIndex = 0;
+        musicLoopCount++;
+
+        if (musicLoopCount % 3 === 0) {
+          setTimeout(() => {
+            playMusicNote(scene, 311, 0.12, 0.08); // Eb4
+            setTimeout(() => playMusicNote(scene, 262, 0.12, 0.07), 130); // C4, 130 ms later
+          }, 40);
+        }
+        
       }
     }
   }
