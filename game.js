@@ -107,7 +107,7 @@ function create() {
   
   // UI
   scoreText = scene.add.text(16, 16, 'TX DATA: 0', {
-    fontSize: '28px',
+    fontSize: '20px',
     fontFamily: 'monospace',
     color: '#00ffff',
     stroke: '#000',
@@ -131,7 +131,7 @@ function create() {
     strokeThickness: 8
   }).setOrigin(0.5);
   
-  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect ⚡ for Tx Rate boost\nAvoid ✱ explosions!', {
+  instructText = scene.add.text(400, 320, 'Navigate the energy pulse!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect ⚡ for Tx Rate boost\nAvoid ✱ explosions and R/C!', {
     fontSize: '22px',
     fontFamily: 'monospace',
     color: '#ffaa00',
@@ -241,7 +241,7 @@ function create() {
       // Boost jump with upward velocity
       playerVX = -80;
       playerFalling = true;
-      playerVY = -250; // Upward jump velocity
+      playerVY = -310; // Upward jump velocity
       createParticles(player.x - 40, player.y, '#ffff00', 12);
       playTone(scene, 880, 0.08);
     }
@@ -355,7 +355,7 @@ function update(_time, delta) {
   
   // Handle falling
   if (playerFalling) {
-    playerVY += dt * 400; // Gravity
+    playerVY += dt * 650; // Gravity
     player.y += playerVY * dt;
     
     // Check if landed on a segment (check X position first, then Y)
@@ -430,8 +430,32 @@ function update(_time, delta) {
       const onGap = currentSegments.length === 0 || currentSegments.some(seg => seg.type === 'gap');
       
       if (onGap) {
-        playerFalling = true;
-        playerVY = 0;
+        // Check if there's a gap obstacle blocking this gap
+        const gapSegment = currentSegments.find(seg => seg.type === 'gap');
+        let hasGapObstacle = false;
+        
+        if (gapSegment) {
+          // Check if any gap obstacle exists in this gap's position
+          hasGapObstacle = obstacles.some(obs => 
+            obs.isGapObstacle &&
+            obs.y === tracks[currentTrack].y &&
+            obs.x >= gapSegment.x &&
+            obs.x <= gapSegment.x + gapSegment.width
+          );
+        } else {
+          // No segment found, check if obstacle is at player position
+          hasGapObstacle = obstacles.some(obs => 
+            obs.isGapObstacle &&
+            Math.abs(obs.x - player.x) < SEGMENT_WIDTH / 2 &&
+            obs.y === tracks[currentTrack].y
+          );
+        }
+        
+        // Only fall if there's no gap obstacle
+        if (!hasGapObstacle) {
+          playerFalling = true;
+          playerVY = 0;
+        }
       }
     }
     
@@ -452,13 +476,33 @@ function update(_time, delta) {
     
     // Check collisions with obstacles
     obstacles.forEach(obs => {
-      const dx = obs.x - player.x;
-      const dy = obs.y - player.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (dist < player.size + obs.size) {
-        endGame(this);
-        createExplosion(player.x, player.y);
+      if (obs.isGapObstacle) {
+        // Rectangular bounding box collision for gap obstacles
+        const obsLeft = obs.x - obs.width / 2;
+        const obsRight = obs.x + obs.width / 2;
+        const obsTop = obs.y - obs.height / 2;
+        const obsBottom = obs.y + obs.height / 2;
+        
+        const playerLeft = player.x - player.size;
+        const playerRight = player.x + player.size;
+        const playerTop = player.y - player.size;
+        const playerBottom = player.y + player.size;
+        
+        if (playerRight > obsLeft && playerLeft < obsRight &&
+            playerBottom > obsTop && playerTop < obsBottom) {
+          endGame(this);
+          createExplosion(player.x, player.y);
+        }
+      } else {
+        // Circular collision for explosion obstacles
+        const dx = obs.x - player.x;
+        const dy = obs.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < player.size + obs.size) {
+          endGame(this);
+          createExplosion(player.x, player.y);
+        }
       }
     });
     
@@ -531,6 +575,9 @@ function spawnSegment() {
     }
   }
   
+  // Track which tracks have gap obstacles (capacitors/resistors)
+  const tracksWithGapObstacles = [];
+  
   // Create segment on each track
   for (let i = 0; i < NUM_TRACKS; i++) {
     const isGap = currentGapTracks.includes(i);
@@ -544,6 +591,21 @@ function spawnSegment() {
     };
     
     segments.push(seg);
+    
+    // Create gap obstacle 50% of the time for gaps
+    if (isGap && Math.random() > 0.5) {
+      const componentType = Math.random() > 0.5 ? 'resistor' : 'capacitor';
+      obstacles.push({
+        x: x + SEGMENT_WIDTH / 2,
+        y: tracks[i].y,
+        componentType: componentType,
+        isGapObstacle: true,
+        width: 60,
+        height: componentType === 'resistor' ? 16 : 80
+      });
+      // Track that this track has a gap obstacle
+      tracksWithGapObstacles.push(i);
+    }
   }
   
   // Update tracking for next segment
@@ -551,7 +613,13 @@ function spawnSegment() {
   
   // Spawn objects: each track has independent 45% chance of object
   // If object spawns: 55% explosion, 45% boost
+  // BUT: skip if there's a capacitor/resistor on this track
   for (let i = 0; i < NUM_TRACKS; i++) {
+    // Skip if this track has a gap obstacle (capacitor or resistor)
+    if (tracksWithGapObstacles.includes(i)) {
+      continue;
+    }
+    
     if (Math.random() > 0.55) {
       // Decide type: 55% explosion, 45% boost
       if (Math.random() > 0.45) {
@@ -854,8 +922,8 @@ function drawCircuitCables(g, chipX, chipY, chipWidth, chipHeight, chipScale = 1
 }
 
 function drawCapacitor(g, x, y, scale = 1) {
-  const w = 60 * scale;
-  const h = 80 * scale;
+  const w = 80 * scale;
+  const h = 55 * scale;
   const r = w / 2;
   
   // Cylinder body (light blue-green)
@@ -971,8 +1039,6 @@ function drawChip(g, x, y, width, height, scale = 1) {
 function drawTitleScreen() {
   graphics.clear();
   drawCircuitBoard(graphics, bgScrollOffset);
-  // drawCapacitor(graphics, 300, 400, 1.2);
-  // drawResistor(graphics, 500, 400, 1.2);
 }
 
 function drawGame() {
@@ -1037,56 +1103,66 @@ function drawGame() {
     });
   }
   
-  // Draw obstacles (pixel art explosions)
+  // Draw obstacles
   obstacles.forEach(obs => {
-    obs.pulse += 0.08;
-    const px = 5; // Pixel size for blocky look
-    const pulseScale = 0.8 + Math.sin(obs.pulse) * 0.2;
-    const s = obs.size * pulseScale;
-    const maxRad = Math.ceil(s);
-    
-    // Outer red layer - circular fill
-    graphics.fillStyle(0xcc0000, 1);
-    const outerRad = s * 0.95;
-    for (let dy = -maxRad; dy <= maxRad; dy += px) {
-      for (let dx = -maxRad; dx <= maxRad; dx += px) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > outerRad * 0.7 && dist <= outerRad) {
-          const noise = Math.sin((dx + dy) * 0.5 + obs.pulse * 2) * 3;
-          if (dist + noise <= outerRad) {
+    if (obs.isGapObstacle) {
+      // Draw gap obstacles (resistor or capacitor)
+      if (obs.componentType === 'resistor') {
+        drawResistor(graphics, obs.x, obs.y, 1.7);
+      } else if (obs.componentType === 'capacitor') {
+        drawCapacitor(graphics, obs.x, obs.y, 1.0);
+      }
+    } else {
+      // Draw explosion obstacles (pixel art explosions)
+      obs.pulse += 0.08;
+      const px = 5; // Pixel size for blocky look
+      const pulseScale = 0.8 + Math.sin(obs.pulse) * 0.2;
+      const s = obs.size * pulseScale;
+      const maxRad = Math.ceil(s);
+      
+      // Outer red layer - circular fill
+      graphics.fillStyle(0xcc0000, 1);
+      const outerRad = s * 0.95;
+      for (let dy = -maxRad; dy <= maxRad; dy += px) {
+        for (let dx = -maxRad; dx <= maxRad; dx += px) {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > outerRad * 0.7 && dist <= outerRad) {
+            const noise = Math.sin((dx + dy) * 0.5 + obs.pulse * 2) * 3;
+            if (dist + noise <= outerRad) {
+              graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
+            }
+          }
+        }
+      }
+      
+      // Middle orange layer - circular fill
+      graphics.fillStyle(0xff6600, 1);
+      const midRad = s * 0.65;
+      for (let dy = -maxRad; dy <= maxRad; dy += px) {
+        for (let dx = -maxRad; dx <= maxRad; dx += px) {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > midRad * 0.5 && dist <= midRad) {
             graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
           }
         }
       }
-    }
-    
-    // Middle orange layer - circular fill
-    graphics.fillStyle(0xff6600, 1);
-    const midRad = s * 0.65;
-    for (let dy = -maxRad; dy <= maxRad; dy += px) {
-      for (let dx = -maxRad; dx <= maxRad; dx += px) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > midRad * 0.5 && dist <= midRad) {
-          graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
+      
+      // Inner yellow layer - circular fill
+      graphics.fillStyle(0xffff00, 1);
+      const innerRad = s * 0.4;
+      for (let dy = -maxRad; dy <= maxRad; dy += px) {
+        for (let dx = -maxRad; dx <= maxRad; dx += px) {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= innerRad) {
+            graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
+          }
         }
       }
+      
+      // White hot center - 2x2 pixel block
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillRect(Math.floor(obs.x - px), Math.floor(obs.y - px), px * 2, px * 2);
     }
-    
-    // Inner yellow layer - circular fill
-    graphics.fillStyle(0xffff00, 1);
-    const innerRad = s * 0.4;
-    for (let dy = -maxRad; dy <= maxRad; dy += px) {
-      for (let dx = -maxRad; dx <= maxRad; dx += px) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= innerRad) {
-          graphics.fillRect(Math.floor(obs.x + dx - px/2), Math.floor(obs.y + dy - px/2), px, px);
-        }
-      }
-    }
-    
-    // White hot center - 2x2 pixel block
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillRect(Math.floor(obs.x - px), Math.floor(obs.y - px), px * 2, px * 2);
   });
   
   // Draw powerups (lightning)
