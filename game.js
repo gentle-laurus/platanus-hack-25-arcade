@@ -1926,6 +1926,10 @@ function drawGame() {
   // Draw circuit board background scrolling left (zoomed out)
   drawCyberpunkCircuitTitle(graphics, bgScrollOffset, 0.85);
   
+  // Draw semi-translucent PCB green rectangle for game area
+  graphics.fillStyle(0x2a4a2a, 0.4); // PCB green with 60% opacity
+  graphics.fillRect(0, 0, 800, 600); // Rectangle behind game elements
+  
   // Draw circuit tracks with rounded cable style
   segments.forEach(seg => {
     if (seg.type === 'plain') {
