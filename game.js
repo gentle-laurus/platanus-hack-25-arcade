@@ -54,8 +54,9 @@ let score = 0, speed = 4.0, baseSpeed = 4.0;
 let gameOver = false, gameStarted = false;
 let gridOffset = 0;
 let bgScrollOffset = 0; // Smooth background scrolling
-let titleText, instructText, startPrompt, capacitorText;
+let titleText, instructText, startPrompt;
 let sceneRef = null;
+let titleOverlay = null;
 let inputTexts = {};
 let countdownText = null;
 let countdownTimer = 0;
@@ -77,19 +78,72 @@ let nameInputText = null;
 let nameCursor = null;
 let showingGameOver = false;
 let showingScoreboard = false;
-let musicPlaying = false;
-let musicTimer = 0;
-let musicPattern = [];
-let musicIndex = 0;
-let titleMusicPlaying = false;
-let titleMusicTimer = 0;
-let titleMusicPattern = [];
-let titleMusicIndex = 0;
-let titleMusicLoopCount = 0;
-let scoreboardMusicPlaying = false;
-let scoreboardMusicTimer = 0;
-let scoreboardMusicPattern = [];
-let scoreboardMusicIndex = 0;
+// Advanced Audio Engine
+let audioCtx;
+let masterGain;
+let convolver;
+let dryGain;
+let wetGain;
+let drumGain;
+let sequencerInterval;
+let bpm = 120;
+let stepDuration;
+let currentSequence = "sequence_0";
+let sequencePlayCount = 0;
+let sequenceMaxPlays = {
+  sequence_0: 4,
+  sequence_1: 4,
+  sequence_2: 4,
+  sequence_3: 4,
+};
+let menuMusicStartTime = null;
+let menuMusicTimeout = null;
+let droneOscillators = []; // Track drone oscillators for stopping
+
+const sequences = {
+  sequence_0: {
+    kick: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    hihat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    bass: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    kalimba: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  sequence_1: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    hihat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    bass: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    kalimba: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  sequence_1_final: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+    hihat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    bass: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    kalimba: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  sequence_2: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    hihat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    bass: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    kalimba: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  sequence_3: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    hihat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    bass: [55, 0, 0, 55, 0, 0, 55, 0, 65, 0, 0, 0, 55, 0, 55, 0],
+    kalimba: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  sequence_3_final: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    hihat: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    bass: [55, 0, 0, 55, 0, 0, 55, 0, 44, 0, 0, 0, 55, 0, 55, 0],
+    kalimba: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+};
 
 // =============================================================================
 // CREATE
@@ -98,6 +152,8 @@ function create() {
   const scene = this;
   sceneRef = scene;
   graphics = this.add.graphics();
+  titleOverlay = this.add.graphics();
+  titleOverlay.setDepth(1); // Behind text but above background
   
   // Initialize tracks (3 horizontal lanes)
   for (let i = 0; i < NUM_TRACKS; i++) {
@@ -143,7 +199,7 @@ function create() {
     color: '#00ffff',
     stroke: '#ff6600',
     strokeThickness: 8
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(10);
   
   instructText = scene.add.text(400, 320, 'Navigate a living circuit at light speed!\n\nW / S: Switch tracks\nSpace bar: Jump gaps\n\nCollect blue ⚡ for Tx Rate boost\nAvoid ✱ explosions and R/C!', {
     fontSize: '22px',
@@ -152,7 +208,7 @@ function create() {
     align: 'center',
     stroke: '#000',
     strokeThickness: 3
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(10);
   
   startPrompt = scene.add.text(400, 500, '<Press ENTER to begin>', {
     fontSize: '26px',
@@ -160,7 +216,7 @@ function create() {
     color: '#00ff00',
     stroke: '#000',
     strokeThickness: 4
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setDepth(10);
   
   scene.tweens.add({
     targets: startPrompt,
@@ -263,7 +319,6 @@ function create() {
       }
     } else if (k === 'P1A' && !playerFalling) {
       // Boost jump with upward velocity
-      playerVX = -80;
       playerFalling = true;
       playerVY = -310; // Upward jump velocity
       createParticles(player.x - 40, player.y, '#ffff00', 12);
@@ -271,12 +326,34 @@ function create() {
     }
   });
   
+  // Initialize advanced audio engine
+  audioCtx = this.sound.context;
+  
+  convolver = audioCtx.createConvolver();
+  convolver.buffer = createReverbIR(3, 2);
+
+  dryGain = audioCtx.createGain();
+  wetGain = audioCtx.createGain();
+  drumGain = audioCtx.createGain();
+  masterGain = audioCtx.createGain();
+
+  dryGain.gain.value = 0.7;
+  wetGain.gain.value = 0.5;
+  drumGain.gain.value = 1;
+  masterGain.gain.value = 0.6;
+
+  dryGain.connect(masterGain);
+  wetGain.connect(convolver);
+  convolver.connect(masterGain);
+  drumGain.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
+  
   // Ensure audio context is unlocked by a user gesture before playing sounds
   const resumeAudio = () => {
     const ctx = scene.sound.context;
     if (ctx && ctx.state !== 'running') ctx.resume();
     playTone(scene, 440, 0.15);
-    startScoreboardMusic();  // Start title screen with scoreboard music
+    // startMenuMusic();  // Start title screen with menu music (commented out for now)
   };
   if (scene.sound.locked) {
     scene.input.once('pointerdown', resumeAudio);
@@ -314,15 +391,6 @@ function isLaneSafeAtX(trackIndex, x) {
 // =============================================================================
 function update(_time, delta) {
   const dt = delta / 1000;
-  
-  // Update background music (gameplay, title screen, or scoreboard)
-  if (showingScoreboard) {
-    updateScoreboardMusic(this, dt);
-  } else if (!gameStarted) {
-    updateScoreboardMusic(this, dt);  // Title screen uses scoreboard music
-  } else if (gameStarted) {
-    updateMusic(this, dt);
-  }
   
   // Update background scroll (smooth continuous scrolling)
   if (!gameStarted) {
@@ -799,64 +867,6 @@ function drawStaticCircuitBoard(g) {
   }
 }
 
-function drawCircuitBoard(g, offset) {
-  // Dark PCB green background
-  g.fillStyle(0x2a4a2a, 1);
-  g.fillRect(0, 0, 800, 600);
-  
-  // Calculate horizontal offsets for smooth scrolling
-  const traceOffsetX = offset % 60;
-  const chipOffsetX = offset % 150;
-  
-  // Circuit traces (horizontal and vertical lines)
-  g.lineStyle(2, 0x7a9a5a, 0.8);
-  for (let y = 0; y < 600; y += 80) {
-    g.lineBetween(0, y, 800, y);
-    g.lineBetween(0, y + 20, 800, y + 20);
-  }
-  // Vertical traces scroll left
-  for (let x = -traceOffsetX; x < 850; x += 60) {
-    g.lineBetween(x, 0, x, 600);
-  }
-  
-  // Add chips and components (scroll left)
-  for (let y = 20; y < 600; y += 160) {
-    for (let x = 50 - chipOffsetX; x < 900; x += 150) {
-      // IC chip
-      g.fillStyle(0x1a1a1a, 1);
-      g.fillRect(x - 20, y - 15, 40, 30);
-      g.lineStyle(1, 0x4a4a4a, 1);
-      g.strokeRect(x - 20, y - 15, 40, 30);
-      
-      // Pins
-      g.fillStyle(0x8a8a8a, 1);
-      for (let i = 0; i < 6; i++) {
-        g.fillRect(x - 25, y - 12 + i * 5, 5, 2);
-        g.fillRect(x + 20, y - 12 + i * 5, 5, 2);
-      }
-    }
-  }
-  
-  // Capacitors and resistors (scroll left)
-  for (let y = 100; y < 600; y += 160) {
-    for (let x = 120 - chipOffsetX; x < 900; x += 150) {
-      // Capacitor
-      g.fillStyle(0x3a3a1a, 1);
-      g.fillCircle(x, y, 8);
-      g.lineStyle(1, 0x8a8a4a, 1);
-      g.strokeCircle(x, y, 8);
-    }
-  }
-  
-  // Solder pads (scroll left)
-  g.fillStyle(0xaa8844, 0.6);
-  for (let y = 10; y < 600; y += 80) {
-    for (let x = 30 - traceOffsetX; x < 850; x += 60) {
-      g.fillCircle(x, y, 3);
-    }
-  }
-}
-
 function drawCircuitCables(g, chipX, chipY, chipWidth, chipHeight, chipScale = 1) {
   // Copper-colored traces (simulating PCB connections)
   // Aligned to the 40-pixel grid
@@ -1108,16 +1118,813 @@ function drawChip(g, x, y, width, height, scale = 1) {
 // =============================================================================
 // DRAWING
 // =============================================================================
+// Realistic neon green circuit board background for title screen
+function drawCyberpunkCircuitTitle(g, offset, scale = 1) {
+  // PCB substrate (dark green, like real circuit boards)
+  g.fillStyle(0x0d2a1a, 1);
+  g.fillRect(0, 0, 800, 600);
+  
+  const G = 24; // Grid size for component placement
+  const snap = v => Math.round(v / G) * G;
+  const t = offset * 0.01;
+  const copper = 0xb87333; // Copper color for traces
+  const centerX = 400;
+  const centerY = 300;
+  
+  // Helper to scale coordinates relative to center (for zoom out effect)
+  const scaleCoord = (x, y) => {
+    return {
+      x: centerX + (x - centerX) * scale,
+      y: centerY + (y - centerY) * scale
+    };
+  };
+  
+  // Collect all chip bounding boxes for clipping traces
+  const chipRects = [];
+  
+  // Helper: Check if a point is inside a rectangle
+  function pointInRect(x, y, rect) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+  
+  // Helper: Check if a point overlaps with any chip
+  function pointOverlapsChip(x, y, radius = 0) {
+    for (const rect of chipRects) {
+      // Check if point (with optional radius) overlaps with chip rectangle
+      const closestX = Math.max(rect.left, Math.min(x, rect.right));
+      const closestY = Math.max(rect.top, Math.min(y, rect.bottom));
+      const dx = x - closestX;
+      const dy = y - closestY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq <= radius * radius) return true;
+    }
+    return false;
+  }
+  
+  // Helper: Check if a line segment intersects a rectangle
+  function lineIntersectsRect(x1, y1, x2, y2, rect) {
+    // Check if either endpoint is inside
+    if (pointInRect(x1, y1, rect) || pointInRect(x2, y2, rect)) return true;
+    
+    // Check if line segment intersects any edge of the rectangle
+    // Using Liang-Barsky algorithm for line-rectangle intersection
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    let t0 = 0, t1 = 1;
+    
+    const p = [-dx, dx, -dy, dy];
+    const q = [x1 - rect.left, rect.right - x1, y1 - rect.top, rect.bottom - y1];
+    
+    for (let i = 0; i < 4; i++) {
+      if (p[i] === 0) {
+        if (q[i] < 0) return false; // Line is parallel and outside
+      } else {
+        const r = q[i] / p[i];
+        if (p[i] < 0) {
+          if (r > t1) return false;
+          if (r > t0) t0 = r;
+        } else {
+          if (r < t0) return false;
+          if (r < t1) t1 = r;
+        }
+      }
+    }
+    
+    return t0 < t1; // Line segment intersects if t0 < t1
+  }
+  
+  // Helper: Clip a line segment against a rectangle, returning segments that don't intersect
+  function clipLineAgainstRect(x1, y1, x2, y2, rect) {
+    if (!lineIntersectsRect(x1, y1, x2, y2, rect)) {
+      return [{x1, y1, x2, y2}]; // No intersection, return original segment
+    }
+    
+    // If line intersects, split it into segments that avoid the chip
+    const segments = [];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    
+    if (len === 0) return [];
+    
+    // Sample points along the line and find segments that don't intersect
+    const step = 2; // Small step size for precision
+    const steps = Math.ceil(len / step);
+    let lastValidX = null, lastValidY = null;
+    let inChip = false;
+    let finalX = x2, finalY = y2; // Store final endpoint
+    
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + dx * t;
+      const y = y1 + dy * t;
+      const inside = pointInRect(x, y, rect);
+      
+      if (!inside && !inChip) {
+        // Starting a valid segment
+        if (lastValidX === null) {
+          lastValidX = x;
+          lastValidY = y;
+        }
+      } else if (inside && lastValidX !== null) {
+        // Entering chip, end current segment
+        segments.push({x1: lastValidX, y1: lastValidY, x2: x, y2: y});
+        lastValidX = null;
+        lastValidY = null;
+        inChip = true;
+      } else if (!inside && inChip) {
+        // Exiting chip, start new segment
+        lastValidX = x;
+        lastValidY = y;
+        inChip = false;
+      }
+    }
+    
+    // Add final segment if we ended outside the chip
+    if (lastValidX !== null) {
+      segments.push({x1: lastValidX, y1: lastValidY, x2: finalX, y2: finalY});
+    }
+    
+    return segments;
+  }
+  
+  // Helper: Draw realistic PCB trace (copper trace with glow), clipping against chips
+  function drawTrace(x1, y1, x2, y2, width = 3) {
+    // Clip against all chips
+    let segments = [{x1, y1, x2, y2}];
+    for (const rect of chipRects) {
+      const newSegments = [];
+      for (const seg of segments) {
+        newSegments.push(...clipLineAgainstRect(seg.x1, seg.y1, seg.x2, seg.y2, rect));
+      }
+      segments = newSegments;
+    }
+    
+    // Draw each non-intersecting segment
+    for (const seg of segments) {
+      // Outer glow
+      g.lineStyle(width + 6, copper, 0.12);
+      g.lineBetween(seg.x1, seg.y1, seg.x2, seg.y2);
+      // Core trace (copper)
+      g.lineStyle(width, copper, 0.95);
+      g.lineBetween(seg.x1, seg.y1, seg.x2, seg.y2);
+      // Solder pad at start (only if not too close to chip)
+      g.fillStyle(copper, 0.8);
+      g.fillCircle(seg.x1, seg.y1, width + 2);
+      // Solder pad at end (only if not too close to chip)
+      g.fillCircle(seg.x2, seg.y2, width + 2);
+    }
+  }
+  
+  // Helper: Draw trace with 90-degree bends (realistic routing)
+  function drawTracedPath(points, width = 3) {
+    for (let i = 0; i < points.length - 1; i++) {
+      drawTrace(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y, width);
+    }
+  }
+  
+  // Subtle grid (like PCB design grid)
+  g.lineStyle(1, 0x1a3a2a, 0.15);
+  for (let x = 0; x < 800; x += G) {
+    g.lineBetween(x, 0, x, 600);
+  }
+  for (let y = 0; y < 600; y += G) {
+    g.lineBetween(0, y, 800, y);
+  }
+  
+  // Main IC chip (center, realistic DIP package) - scaled
+  const baseCx = 400, baseCy = 300;
+  const baseIcW = 140, baseIcH = 100;
+  const sc = scaleCoord(baseCx, baseCy);
+  const cx = sc.x, cy = sc.y;
+  const icW = baseIcW * scale, icH = baseIcH * scale;
+  // Add main IC to chip rectangles for clipping
+  chipRects.push({
+    left: cx - icW/2,
+    right: cx + icW/2,
+    top: cy - icH/2,
+    bottom: cy + icH/2
+  });
+  // IC body
+  g.fillStyle(0x1a1a1a, 1);
+  g.fillRect(cx - icW/2, cy - icH/2, icW, icH);
+  g.lineStyle(2, 0x3a3a3a, 1);
+  g.strokeRect(cx - icW/2, cy - icH/2, icW, icH);
+  // IC marking (dot for pin 1)
+  g.fillStyle(copper, 0.9);
+  g.fillCircle(cx - icW/2 + 8 * scale, cy - icH/2 + 8 * scale, 3 * scale);
+  // Pins (dual in-line package)
+  const pinCount = 14;
+  const pinSpacing = icH / (pinCount / 2 + 1);
+  g.fillStyle(0x8a8a8a, 1);
+  // Left side pins
+  for (let i = 0; i < pinCount / 2; i++) {
+    const py = cy - icH/2 + pinSpacing * (i + 1);
+    g.fillRect(cx - icW/2 - 12 * scale, py - 1 * scale, 12 * scale, 2 * scale);
+  }
+  // Right side pins
+  for (let i = 0; i < pinCount / 2; i++) {
+    const py = cy - icH/2 + pinSpacing * (i + 1);
+    g.fillRect(cx + icW/2, py - 1 * scale, 12 * scale, 2 * scale);
+  }
+  
+  // Smaller ICs (realistic placement) - scaled
+  const baseIcs = [
+    {x: 180, y: 150, w: 80, h: 60, pins: 8},
+    {x: 620, y: 150, w: 80, h: 60, pins: 8},
+    {x: 180, y: 450, w: 80, h: 60, pins: 8},
+    {x: 620, y: 450, w: 80, h: 60, pins: 8}
+  ];
+  
+  const ics = baseIcs.map(baseIc => {
+    const sc = scaleCoord(baseIc.x, baseIc.y);
+    return {
+      x: sc.x,
+      y: sc.y,
+      w: baseIc.w * scale,
+      h: baseIc.h * scale,
+      pins: baseIc.pins
+    };
+  });
+  
+  ics.forEach(ic => {
+    // Add smaller IC to chip rectangles for clipping
+    chipRects.push({
+      left: ic.x - ic.w/2,
+      right: ic.x + ic.w/2,
+      top: ic.y - ic.h/2,
+      bottom: ic.y + ic.h/2
+    });
+    g.fillStyle(0x1a1a1a, 1);
+    g.fillRect(ic.x - ic.w/2, ic.y - ic.h/2, ic.w, ic.h);
+    g.lineStyle(2, 0x3a3a3a, 1);
+    g.strokeRect(ic.x - ic.w/2, ic.y - ic.h/2, ic.w, ic.h);
+    // Pin 1 marker
+    g.fillStyle(copper, 0.9);
+    g.fillCircle(ic.x - ic.w/2 + 6, ic.y - ic.h/2 + 6, 2);
+    // Pins
+    g.fillStyle(0x8a8a8a, 1);
+    const pSpacing = ic.h / (ic.pins / 2 + 1);
+    for (let i = 0; i < ic.pins / 2; i++) {
+      const py = ic.y - ic.h/2 + pSpacing * (i + 1);
+      g.fillRect(ic.x - ic.w/2 - 8, py - 1, 8, 2);
+      g.fillRect(ic.x + ic.w/2, py - 1, 8, 2);
+    }
+  });
+  
+  // Resistors (realistic axial resistors) - scaled
+  const baseResistors = [
+    {x: 120, y: 250, angle: 0},
+    {x: 680, y: 250, angle: 0},
+    {x: 300, y: 120, angle: Math.PI/2},
+    {x: 500, y: 120, angle: Math.PI/2},
+    {x: 300, y: 480, angle: Math.PI/2},
+    {x: 500, y: 480, angle: Math.PI/2}
+  ];
+  
+  baseResistors.forEach(baseR => {
+    const sc = scaleCoord(baseR.x, baseR.y);
+    const r = {x: sc.x, y: sc.y, angle: baseR.angle};
+    // Skip if resistor overlaps with any chip
+    if (pointOverlapsChip(r.x, r.y, 15 * scale)) return;
+    
+    const len = 30 * scale;
+    const bodyLen = 20 * scale;
+    const bodyRad = 4 * scale;
+    const cos = Math.cos(r.angle);
+    const sin = Math.sin(r.angle);
+    
+    // Leads
+    g.lineStyle(2 * scale, copper, 0.9);
+    g.lineBetween(r.x - cos * len/2, r.y - sin * len/2, r.x - cos * bodyLen/2, r.y - sin * bodyLen/2);
+    g.lineBetween(r.x + cos * bodyLen/2, r.y + sin * bodyLen/2, r.x + cos * len/2, r.y + sin * len/2);
+    
+    // Body (beige/tan)
+    g.fillStyle(0xd4c4a8, 1);
+    g.fillEllipse(r.x, r.y, bodyLen, bodyRad * 2);
+    // Color bands
+    g.fillStyle(0x800080, 1);
+    g.fillRect(r.x - bodyLen/2 + 4 * scale, r.y - bodyRad, 2 * scale, bodyRad * 2);
+    g.fillStyle(0xff6600, 1);
+    g.fillRect(r.x - bodyLen/2 + 8 * scale, r.y - bodyRad, 2 * scale, bodyRad * 2);
+  });
+  
+  // Capacitors (realistic radial capacitors) - scaled
+  const baseCapacitors = [
+    {x: 100, y: 350},
+    {x: 700, y: 350},
+    {x: 250, y: 200},
+    {x: 550, y: 200},
+    {x: 250, y: 400},
+    {x: 550, y: 400}
+  ];
+  
+  baseCapacitors.forEach(baseC => {
+    const sc = scaleCoord(baseC.x, baseC.y);
+    const c = {x: sc.x, y: sc.y};
+    const rad = 6 * scale;
+    const height = 16 * scale;
+    // Body (cylinder)
+    g.fillStyle(0x7dd3c0, 1);
+    g.fillEllipse(c.x, c.y - height/2, rad * 2, height * 0.4);
+    g.fillRect(c.x - rad, c.y - height/2, rad * 2, height);
+    g.fillEllipse(c.x, c.y + height/2, rad * 2, height * 0.4);
+    // Leads
+    g.lineStyle(2 * scale, copper, 0.9);
+    g.lineBetween(c.x - 4 * scale, c.y + height/2, c.x - 4 * scale, c.y + height/2 + 12 * scale);
+    g.lineBetween(c.x + 4 * scale, c.y + height/2, c.x + 4 * scale, c.y + height/2 + 12 * scale);
+  });
+  
+  // Realistic trace routing (90-degree bends, like real PCBs)
+  // Power traces (thicker) - use clipping to avoid chips - scaled
+  g.lineStyle(5 * scale, copper, 0.7);
+  const basePowerTraces = [
+    {x1: 50, y1: 100, x2: 750, y2: 100},
+    {x1: 50, y1: 500, x2: 750, y2: 500},
+    {x1: 100, y1: 50, x2: 100, y2: 550},
+    {x1: 700, y1: 50, x2: 700, y2: 550}
+  ];
+  const powerTraces = basePowerTraces.map(baseTrace => {
+    const sc1 = scaleCoord(baseTrace.x1, baseTrace.y1);
+    const sc2 = scaleCoord(baseTrace.x2, baseTrace.y2);
+    return {x1: snap(sc1.x), y1: snap(sc1.y), x2: snap(sc2.x), y2: snap(sc2.y)};
+  });
+  powerTraces.forEach(trace => {
+    let segments = [{x1: trace.x1, y1: trace.y1, x2: trace.x2, y2: trace.y2}];
+    for (const rect of chipRects) {
+      const newSegments = [];
+      for (const seg of segments) {
+        newSegments.push(...clipLineAgainstRect(seg.x1, seg.y1, seg.x2, seg.y2, rect));
+      }
+      segments = newSegments;
+    }
+    segments.forEach(seg => {
+      g.lineBetween(seg.x1, seg.y1, seg.x2, seg.y2);
+    });
+  });
+  
+  // Signal traces from main IC
+  const pulse = Math.sin(t * 2) * 0.15 + 0.85;
+  
+  // Top traces
+  drawTracedPath([
+    {x: cx - icW/2 + 20, y: cy - icH/2},
+    {x: cx - icW/2 + 20, y: snap(cy - icH/2 - 40)},
+    {x: snap(200), y: snap(cy - icH/2 - 40)},
+    {x: snap(200), y: snap(120)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx, y: cy - icH/2},
+    {x: cx, y: snap(cy - icH/2 - 60)},
+    {x: snap(400), y: snap(cy - icH/2 - 60)},
+    {x: snap(400), y: snap(100)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx + icW/2 - 20, y: cy - icH/2},
+    {x: cx + icW/2 - 20, y: snap(cy - icH/2 - 40)},
+    {x: snap(600), y: snap(cy - icH/2 - 40)},
+    {x: snap(600), y: snap(120)}
+  ], 3);
+  
+  // Bottom traces
+  drawTracedPath([
+    {x: cx - icW/2 + 20, y: cy + icH/2},
+    {x: cx - icW/2 + 20, y: snap(cy + icH/2 + 40)},
+    {x: snap(200), y: snap(cy + icH/2 + 40)},
+    {x: snap(200), y: snap(480)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx, y: cy + icH/2},
+    {x: cx, y: snap(cy + icH/2 + 60)},
+    {x: snap(400), y: snap(cy + icH/2 + 60)},
+    {x: snap(400), y: snap(500)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx + icW/2 - 20, y: cy + icH/2},
+    {x: cx + icW/2 - 20, y: snap(cy + icH/2 + 40)},
+    {x: snap(600), y: snap(cy + icH/2 + 40)},
+    {x: snap(600), y: snap(480)}
+  ], 3);
+  
+  // Side traces
+  drawTracedPath([
+    {x: cx - icW/2, y: cy - icH/2 + 20},
+    {x: snap(cx - icW/2 - 40), y: cy - icH/2 + 20},
+    {x: snap(cx - icW/2 - 40), y: snap(150)},
+    {x: snap(100), y: snap(150)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx - icW/2, y: cy},
+    {x: snap(cx - icW/2 - 60), y: cy},
+    {x: snap(cx - icW/2 - 60), y: snap(300)},
+    {x: snap(100), y: snap(300)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx - icW/2, y: cy + icH/2 - 20},
+    {x: snap(cx - icW/2 - 40), y: cy + icH/2 - 20},
+    {x: snap(cx - icW/2 - 40), y: snap(450)},
+    {x: snap(100), y: snap(450)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx + icW/2, y: cy - icH/2 + 20},
+    {x: snap(cx + icW/2 + 40), y: cy - icH/2 + 20},
+    {x: snap(cx + icW/2 + 40), y: snap(150)},
+    {x: snap(700), y: snap(150)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx + icW/2, y: cy},
+    {x: snap(cx + icW/2 + 60), y: cy},
+    {x: snap(cx + icW/2 + 60), y: snap(300)},
+    {x: snap(700), y: snap(300)}
+  ], 3);
+  
+  drawTracedPath([
+    {x: cx + icW/2, y: cy + icH/2 - 20},
+    {x: snap(cx + icW/2 + 40), y: cy + icH/2 - 20},
+    {x: snap(cx + icW/2 + 40), y: snap(450)},
+    {x: snap(700), y: snap(450)}
+  ], 3);
+  
+  // Connect smaller ICs to main traces
+  ics.forEach((ic, i) => {
+    const connectPoints = [
+      [{x: ic.x + ic.w/2, y: ic.y}, {x: snap(ic.x + ic.w/2 + 20), y: ic.y}, {x: snap(ic.x + ic.w/2 + 20), y: snap(300)}, {x: snap(700), y: snap(300)}],
+      [{x: ic.x - ic.w/2, y: ic.y}, {x: snap(ic.x - ic.w/2 - 20), y: ic.y}, {x: snap(ic.x - ic.w/2 - 20), y: snap(300)}, {x: snap(100), y: snap(300)}],
+      [{x: ic.x, y: ic.y - ic.h/2}, {x: ic.x, y: snap(ic.y - ic.h/2 - 20)}, {x: snap(400), y: snap(ic.y - ic.h/2 - 20)}, {x: snap(400), y: snap(100)}],
+      [{x: ic.x, y: ic.y + ic.h/2}, {x: ic.x, y: snap(ic.y + ic.h/2 + 20)}, {x: snap(400), y: snap(ic.y + ic.h/2 + 20)}, {x: snap(400), y: snap(500)}]
+    ];
+    drawTracedPath(connectPoints[i % connectPoints.length], 2);
+  });
+  
+  // Via holes (through-hole connections with pulsing)
+  const vias = [
+    {x: snap(200), y: snap(120)},
+    {x: snap(400), y: snap(100)},
+    {x: snap(600), y: snap(120)},
+    {x: snap(200), y: snap(480)},
+    {x: snap(400), y: snap(500)},
+    {x: snap(600), y: snap(480)},
+    {x: snap(100), y: snap(150)},
+    {x: snap(100), y: snap(300)},
+    {x: snap(100), y: snap(450)},
+    {x: snap(700), y: snap(150)},
+    {x: snap(700), y: snap(300)},
+    {x: snap(700), y: snap(450)}
+  ];
+  
+  vias.forEach((via, i) => {
+    // Skip if via overlaps with any chip
+    if (pointOverlapsChip(via.x, via.y, 6)) return;
+    
+    const pulse = Math.sin(t * 4 + i * 0.5) * 0.2 + 0.8;
+    // Via ring (copper)
+    g.lineStyle(2, copper, pulse);
+    g.strokeCircle(via.x, via.y, 4);
+    // Via hole (center)
+    g.fillStyle(0x0d2a1a, 1);
+    g.fillCircle(via.x, via.y, 2);
+    // Glow
+    g.fillStyle(copper, pulse * 0.3);
+    g.fillCircle(via.x, via.y, 6);
+  });
+  
+  // Solder pads at component connections
+  const pads = [
+    {x: cx - icW/2 + 20, y: cy - icH/2},
+    {x: cx, y: cy - icH/2},
+    {x: cx + icW/2 - 20, y: cy - icH/2},
+    {x: cx - icW/2 + 20, y: cy + icH/2},
+    {x: cx, y: cy + icH/2},
+    {x: cx + icW/2 - 20, y: cy + icH/2}
+  ];
+  
+  pads.forEach(pad => {
+    // Skip if pad overlaps with any chip (excluding the chip it's connected to)
+    if (pointOverlapsChip(pad.x, pad.y, 3)) return;
+    
+    g.fillStyle(copper, 0.9);
+    g.fillCircle(pad.x, pad.y, 3);
+    g.fillStyle(0x0d2a1a, 1);
+    g.fillCircle(pad.x, pad.y, 1);
+  });
+  
+  // Data flow animation (pulses along traces)
+  const packetSpeed = offset * 0.2;
+  const tracePaths = [
+    [{x: cx - icW/2 + 20, y: cy - icH/2}, {x: cx - icW/2 + 20, y: snap(cy - icH/2 - 40)}, {x: snap(200), y: snap(cy - icH/2 - 40)}, {x: snap(200), y: snap(120)}],
+    [{x: cx, y: cy + icH/2}, {x: cx, y: snap(cy + icH/2 + 60)}, {x: snap(400), y: snap(cy + icH/2 + 60)}, {x: snap(400), y: snap(500)}],
+    [{x: cx - icW/2, y: cy}, {x: snap(cx - icW/2 - 60), y: cy}, {x: snap(cx - icW/2 - 60), y: snap(300)}, {x: snap(100), y: snap(300)}],
+    [{x: cx + icW/2, y: cy}, {x: snap(cx + icW/2 + 60), y: cy}, {x: snap(cx + icW/2 + 60), y: snap(300)}, {x: snap(700), y: snap(300)}]
+  ];
+  
+  tracePaths.forEach((path, i) => {
+    const offset = (packetSpeed + i * 100) % 500;
+    let totalDist = 0;
+    let currentSeg = 0;
+    let segDist = 0;
+    
+    for (let j = 0; j < path.length - 1; j++) {
+      const dx = path[j + 1].x - path[j].x;
+      const dy = path[j + 1].y - path[j].y;
+      const segLen = Math.sqrt(dx * dx + dy * dy);
+      
+      if (offset <= totalDist + segLen) {
+        currentSeg = j;
+        segDist = offset - totalDist;
+        break;
+      }
+      totalDist += segLen;
+    }
+    
+    if (currentSeg < path.length - 1) {
+      const dx = path[currentSeg + 1].x - path[currentSeg].x;
+      const dy = path[currentSeg + 1].y - path[currentSeg].y;
+      const segLen = Math.sqrt(dx * dx + dy * dy);
+      const ratio = segLen > 0 ? segDist / segLen : 0;
+      
+      const px = path[currentSeg].x + dx * ratio;
+      const py = path[currentSeg].y + dy * ratio;
+      
+      // Draw data pulse
+      g.fillStyle(copper, 1);
+      g.fillCircle(px, py, 3);
+      g.fillStyle(copper, 0.4);
+      g.fillCircle(px, py, 7);
+    }
+  });
+  
+  // ===== ADDITIONAL CIRCUIT ELEMENTS TO FILL SCREEN =====
+  
+  // Additional smaller ICs near edges - define before drawing traces so they can be clipped
+  const edgeICs = [
+    {x: 60, y: 80, w: 50, h: 40, pins: 6},
+    {x: 740, y: 80, w: 50, h: 40, pins: 6},
+    {x: 60, y: 520, w: 50, h: 40, pins: 6},
+    {x: 740, y: 520, w: 50, h: 40, pins: 6},
+    {x: 60, y: 300, w: 50, h: 40, pins: 6},
+    {x: 740, y: 300, w: 50, h: 40, pins: 6},
+    {x: 400, y: 40, w: 50, h: 40, pins: 6},
+    {x: 400, y: 560, w: 50, h: 40, pins: 6}
+  ];
+  
+  // Add edge ICs to chip rectangles for clipping (before drawing traces)
+  edgeICs.forEach(ic => {
+    chipRects.push({
+      left: ic.x - ic.w/2,
+      right: ic.x + ic.w/2,
+      top: ic.y - ic.h/2,
+      bottom: ic.y + ic.h/2
+    });
+  });
+  
+  // Edge traces (along borders) - use clipping to avoid chips
+  g.lineStyle(4, copper, 0.6);
+  const edgeTraces = [
+    {x1: 0, y1: snap(20), x2: 800, y2: snap(20)},
+    {x1: 0, y1: snap(40), x2: 800, y2: snap(40)},
+    {x1: 0, y1: snap(560), x2: 800, y2: snap(560)},
+    {x1: 0, y1: snap(580), x2: 800, y2: snap(580)},
+    {x1: snap(20), y1: 0, x2: snap(20), y2: 600},
+    {x1: snap(40), y1: 0, x2: snap(40), y2: 600},
+    {x1: snap(760), y1: 0, x2: snap(760), y2: 600},
+    {x1: snap(780), y1: 0, x2: snap(780), y2: 600}
+  ];
+  edgeTraces.forEach(trace => {
+    let segments = [{x1: trace.x1, y1: trace.y1, x2: trace.x2, y2: trace.y2}];
+    for (const rect of chipRects) {
+      const newSegments = [];
+      for (const seg of segments) {
+        newSegments.push(...clipLineAgainstRect(seg.x1, seg.y1, seg.x2, seg.y2, rect));
+      }
+      segments = newSegments;
+    }
+    segments.forEach(seg => {
+      g.lineBetween(seg.x1, seg.y1, seg.x2, seg.y2);
+    });
+  });
+  
+  edgeICs.forEach(ic => {
+    g.fillStyle(0x1a1a1a, 1);
+    g.fillRect(ic.x - ic.w/2, ic.y - ic.h/2, ic.w, ic.h);
+    g.lineStyle(2, 0x3a3a3a, 1);
+    g.strokeRect(ic.x - ic.w/2, ic.y - ic.h/2, ic.w, ic.h);
+    g.fillStyle(copper, 0.9);
+    g.fillCircle(ic.x - ic.w/2 + 4, ic.y - ic.h/2 + 4, 2);
+    g.fillStyle(0x8a8a8a, 1);
+    const pSpacing = ic.h / (ic.pins / 2 + 1);
+    for (let i = 0; i < ic.pins / 2; i++) {
+      const py = ic.y - ic.h/2 + pSpacing * (i + 1);
+      g.fillRect(ic.x - ic.w/2 - 6, py - 1, 6, 2);
+      g.fillRect(ic.x + ic.w/2, py - 1, 6, 2);
+    }
+  });
+  
+  // Additional resistors near edges
+  const edgeResistors = [
+    {x: 40, y: 180, angle: Math.PI/2},
+    {x: 40, y: 420, angle: Math.PI/2},
+    {x: 760, y: 180, angle: Math.PI/2},
+    {x: 760, y: 420, angle: Math.PI/2},
+    {x: 200, y: 30, angle: 0},
+    {x: 400, y: 30, angle: 0},
+    {x: 600, y: 30, angle: 0},
+    {x: 200, y: 570, angle: 0},
+    {x: 400, y: 570, angle: 0},
+    {x: 600, y: 570, angle: 0}
+  ];
+  
+  edgeResistors.forEach(r => {
+    // Skip if resistor overlaps with any chip
+    if (pointOverlapsChip(r.x, r.y, 12)) return;
+    
+    const len = 25;
+    const bodyLen = 18;
+    const bodyRad = 3;
+    const cos = Math.cos(r.angle);
+    const sin = Math.sin(r.angle);
+    g.lineStyle(2, copper, 0.9);
+    g.lineBetween(r.x - cos * len/2, r.y - sin * len/2, r.x - cos * bodyLen/2, r.y - sin * bodyLen/2);
+    g.lineBetween(r.x + cos * bodyLen/2, r.y + sin * bodyLen/2, r.x + cos * len/2, r.y + sin * len/2);
+    g.fillStyle(0xd4c4a8, 1);
+    g.fillEllipse(r.x, r.y, bodyLen, bodyRad * 2);
+    g.fillStyle(0x800080, 1);
+    g.fillRect(r.x - bodyLen/2 + 3, r.y - bodyRad, 2, bodyRad * 2);
+    g.fillStyle(0xff6600, 1);
+    g.fillRect(r.x - bodyLen/2 + 7, r.y - bodyRad, 2, bodyRad * 2);
+  });
+  
+  // Additional capacitors near edges
+  const edgeCapacitors = [
+    {x: 30, y: 250}, {x: 30, y: 350},
+    {x: 770, y: 250}, {x: 770, y: 350},
+    {x: 150, y: 30}, {x: 350, y: 30}, {x: 450, y: 30}, {x: 650, y: 30},
+    {x: 150, y: 570}, {x: 350, y: 570}, {x: 450, y: 570}, {x: 650, y: 570}
+  ];
+  
+  edgeCapacitors.forEach(c => {
+    const rad = 5;
+    const height = 14;
+    g.fillStyle(0x7dd3c0, 1);
+    g.fillEllipse(c.x, c.y - height/2, rad * 2, height * 0.4);
+    g.fillRect(c.x - rad, c.y - height/2, rad * 2, height);
+    g.fillEllipse(c.x, c.y + height/2, rad * 2, height * 0.4);
+    g.lineStyle(2, copper, 0.9);
+    g.lineBetween(c.x - 3, c.y + height/2, c.x - 3, c.y + height/2 + 10);
+    g.lineBetween(c.x + 3, c.y + height/2, c.x + 3, c.y + height/2 + 10);
+  });
+  
+  // Additional traces connecting to edges
+  // Top area traces
+  for (let i = 0; i < 8; i++) {
+    const x = 100 + i * 90;
+    if (x < 750) {
+      drawTracedPath([
+        {x: x, y: snap(60)},
+        {x: x, y: snap(20)},
+        {x: snap(x), y: snap(20)}
+      ], 2);
+    }
+  }
+  
+  // Bottom area traces
+  for (let i = 0; i < 8; i++) {
+    const x = 100 + i * 90;
+    if (x < 750) {
+      drawTracedPath([
+        {x: x, y: snap(540)},
+        {x: x, y: snap(580)},
+        {x: snap(x), y: snap(580)}
+      ], 2);
+    }
+  }
+  
+  // Left area traces
+  for (let i = 0; i < 6; i++) {
+    const y = 100 + i * 80;
+    if (y < 550) {
+      drawTracedPath([
+        {x: snap(60), y: y},
+        {x: snap(20), y: y},
+        {x: snap(20), y: snap(y)}
+      ], 2);
+    }
+  }
+  
+  // Right area traces
+  for (let i = 0; i < 6; i++) {
+    const y = 100 + i * 80;
+    if (y < 550) {
+      drawTracedPath([
+        {x: snap(740), y: y},
+        {x: snap(780), y: y},
+        {x: snap(780), y: snap(y)}
+      ], 2);
+    }
+  }
+  
+  // Cross-connecting traces (horizontal)
+  for (let y = 0; y < 600; y += 120) {
+    if (y > 50 && y < 550) {
+      drawTracedPath([
+        {x: snap(50), y: snap(y)},
+        {x: snap(750), y: snap(y)}
+      ], 2);
+    }
+  }
+  
+  // Cross-connecting traces (vertical)
+  for (let x = 0; x < 800; x += 120) {
+    if (x > 50 && x < 750) {
+      drawTracedPath([
+        {x: snap(x), y: snap(50)},
+        {x: snap(x), y: snap(550)}
+      ], 2);
+    }
+  }
+  
+  // Additional vias distributed across screen
+  const additionalVias = [];
+  for (let x = 50; x < 800; x += 80) {
+    for (let y = 50; y < 600; y += 80) {
+      if (Math.abs(x - 400) > 100 || Math.abs(y - 300) > 100) {
+        additionalVias.push({x: snap(x), y: snap(y)});
+      }
+    }
+  }
+  
+  additionalVias.forEach((via, i) => {
+    // Skip if via overlaps with any chip
+    if (pointOverlapsChip(via.x, via.y, 5)) return;
+    
+    const pulse = Math.sin(t * 3 + i * 0.3) * 0.15 + 0.75;
+    g.lineStyle(1.5, copper, pulse);
+    g.strokeCircle(via.x, via.y, 3);
+    g.fillStyle(0x0d2a1a, 1);
+    g.fillCircle(via.x, via.y, 1.5);
+    g.fillStyle(copper, pulse * 0.25);
+    g.fillCircle(via.x, via.y, 5);
+  });
+  
+  // Additional solder pads distributed
+  const additionalPads = [];
+  for (let x = 80; x < 800; x += 100) {
+    for (let y = 80; y < 600; y += 100) {
+      if (Math.abs(x - 400) > 120 || Math.abs(y - 300) > 120) {
+        additionalPads.push({x: snap(x), y: snap(y)});
+      }
+    }
+  }
+  
+  additionalPads.forEach(pad => {
+    // Skip if pad overlaps with any chip
+    if (pointOverlapsChip(pad.x, pad.y, 2.5)) return;
+    
+    g.fillStyle(copper, 0.7);
+    g.fillCircle(pad.x, pad.y, 2.5);
+    g.fillStyle(0x0d2a1a, 1);
+    g.fillCircle(pad.x, pad.y, 0.8);
+  });
+  
+  // Corner connection points
+  const corners = [
+    {x: 0, y: 0}, {x: 800, y: 0},
+    {x: 0, y: 600}, {x: 800, y: 600}
+  ];
+  
+  corners.forEach(corner => {
+    g.fillStyle(copper, 0.8);
+    g.fillCircle(corner.x, corner.y, 6);
+    g.lineStyle(2, copper, 0.6);
+    g.strokeCircle(corner.x, corner.y, 8);
+  });
+  
+}
+
 function drawTitleScreen() {
   graphics.clear();
-  drawCircuitBoard(graphics, bgScrollOffset);
+  drawCyberpunkCircuitTitle(graphics, bgScrollOffset);
+  
+  // Draw semi-translucent PCB green rectangle behind instructions
+  if (titleOverlay) {
+    titleOverlay.clear();
+    titleOverlay.fillStyle(0x2a4a2a, 0.6); // PCB green with 60% opacity
+    titleOverlay.fillRect(50, 80, 700, 460); // Rectangle behind instructions area
+  }
 }
 
 function drawGame() {
   graphics.clear();
   
-  // Draw circuit board background scrolling left
-  drawCircuitBoard(graphics, bgScrollOffset);
+  // Draw circuit board background scrolling left (zoomed out)
+  drawCyberpunkCircuitTitle(graphics, bgScrollOffset, 0.85);
   
   // Draw circuit tracks with rounded cable style
   segments.forEach(seg => {
@@ -1301,13 +2108,13 @@ function startGame(scene) {
   titleText.destroy();
   instructText.destroy();
   startPrompt.destroy();
-  if (capacitorText) capacitorText.destroy();
+  if (titleOverlay) titleOverlay.clear();
   scoreText.setVisible(true);
   speedText.setVisible(true);
   
   // Stop title music and start gameplay music
-  stopScoreboardMusic();
-  startMusic();
+  // stopMenuMusic();  // Menu music commented out for now
+  startSequencer();
   
   // Start countdown
   countdownTimer = 1.2;
@@ -1324,6 +2131,7 @@ function startGame(scene) {
 
 function endGame(scene) {
   gameOver = true;
+  stopSequencer();  // Stop all music when game ends
   
   // Check if score qualifies for top 5
   const isHighScore = (highScores.length < 5 || score > highScores[4].score) && score > 0;
@@ -1369,7 +2177,7 @@ function showGameOver(scene) {
     strokeThickness: 4
   }).setOrigin(0.5);
   
-  continuePrompt =scene.add.text(400, 470, '<Press ENTER to continue>', {
+  const continuePrompt = scene.add.text(400, 470, '<Press ENTER to continue>', {
     fontSize: '24px',
     fontFamily: 'monospace',
     color: '#00ff00',
@@ -1512,9 +2320,8 @@ function submitScore(scene) {
 
 function showScoreboard(scene, justSubmitted) {
   showingScoreboard = true;
-  stopMusic();
-  stopTitleMusic();
-  startScoreboardMusic();
+  stopSequencer();
+  // startMenuMusic();  // Menu music commented out for now
   // Best effort: ensure audio context is running
   const _ctx = scene.sound.context;
   if (_ctx && _ctx.state !== 'running' && _ctx.resume) {
@@ -1539,7 +2346,7 @@ function showScoreboard(scene, justSubmitted) {
   drawChip(chipGraphics, chipX, chipY, chipWidth, chipHeight, chipScale);
   
   // High Scores
-  highScoreText = scene.add.text(400, 120, '═══ HIGH SCORES ═══', {
+  scene.add.text(400, 120, '═══ HIGH SCORES ═══', {
     fontSize: '54px',
     fontFamily: 'monospace',
     color: '#00ffff',
@@ -1656,9 +2463,565 @@ function restartGame(scene) {
   countdownTimer = 0;
   firstSegmentX = null;
   bgScrollOffset = 0;
-  stopMusic();
-  stopTitleMusic();
-  stopScoreboardMusic();
+  stopSequencer();
+  // stopMenuMusic();  // Menu music commented out for now
+}
+
+// =============================================================================
+// ADVANCED AUDIO SYNTHESIS ENGINE
+// =============================================================================
+function createReverbIR(duration, decay) {
+  const length = duration * audioCtx.sampleRate;
+  const buffer = audioCtx.createBuffer(2, length, audioCtx.sampleRate);
+
+  for (let channel = 0; channel < 2; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < length; i++) {
+      const envelope = Math.exp((-decay * i) / audioCtx.sampleRate);
+      data[i] = (Math.random() * 2 - 1) * envelope;
+    }
+  }
+  return buffer;
+}
+
+function makeDistortionCurve(amount) {
+  const samples = 2048;
+  const curve = new Float32Array(samples);
+  const deg = Math.PI / 180;
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+function dissonantSynth(freq, time, duration, detuneOffset, pan) {
+  const baseDetunes = [0, -3, 3, -6, 6, -9, 9, -12, 12];
+  const detunes = baseDetunes.map((d) => d + detuneOffset);
+  const oscs = [];
+
+  const distortion = audioCtx.createWaveShaper();
+  distortion.curve = makeDistortionCurve(100);
+  distortion.oversample = "4x";
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 800;
+  filter.Q.value = 4;
+
+  const panner = audioCtx.createStereoPanner();
+  panner.pan.value = pan;
+
+  const g = audioCtx.createGain();
+  g.gain.value = 0.3;
+
+  for (let i = 0; i < detunes.length; i++) {
+    const osc = audioCtx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = freq;
+    osc.detune.value = detunes[i];
+
+    const oscGain = audioCtx.createGain();
+    oscGain.gain.value = 1 / detunes.length;
+
+    osc.connect(oscGain);
+    oscGain.connect(distortion);
+    oscs.push(osc);
+  }
+
+  distortion.connect(filter);
+  filter.connect(g);
+  g.connect(panner);
+  panner.connect(dryGain);
+
+  oscs.forEach((osc) => {
+    osc.start(time);
+    osc.stop(time + duration);
+  });
+  
+  return oscs; // Return oscillators so they can be stopped
+}
+
+function kickDrum(time) {
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+
+  osc.frequency.setValueAtTime(150, time);
+  osc.frequency.exponentialRampToValueAtTime(40, time + 0.05);
+
+  g.gain.setValueAtTime(1, time);
+  g.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
+
+  osc.connect(g);
+  g.connect(drumGain);
+
+  osc.start(time);
+  osc.stop(time + 0.3);
+}
+
+function snareDrum(time) {
+  const noise = audioCtx.createBufferSource();
+  const buffer = audioCtx.createBuffer(
+    1,
+    audioCtx.sampleRate * 0.2,
+    audioCtx.sampleRate
+  );
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  noise.buffer = buffer;
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 2000;
+  filter.Q.value = 1;
+
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.6, time);
+  g.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+
+  noise.connect(filter);
+  filter.connect(g);
+  g.connect(drumGain);
+
+  noise.start(time);
+  noise.stop(time + 0.15);
+}
+
+function hiHat(time) {
+  const noise = audioCtx.createBufferSource();
+  const buffer = audioCtx.createBuffer(
+    1,
+    audioCtx.sampleRate * 0.1,
+    audioCtx.sampleRate
+  );
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  noise.buffer = buffer;
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.value = 8000;
+
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.2, time);
+  g.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+
+  noise.connect(filter);
+  filter.connect(g);
+  g.connect(drumGain);
+
+  noise.start(time);
+  noise.stop(time + 0.05);
+}
+
+function fatBass(freq, time, duration) {
+  const oscs = [];
+
+  for (let i = 0; i < 3; i++) {
+    const osc = audioCtx.createOscillator();
+    osc.type = i === 0 ? "sine" : "sawtooth";
+    osc.frequency.value = freq;
+    osc.detune.value = i * 2;
+    oscs.push(osc);
+  }
+
+  const preGain = audioCtx.createGain();
+  preGain.gain.value = 3;
+
+  const distortion = audioCtx.createWaveShaper();
+  distortion.curve = makeDistortionCurve(150);
+  distortion.oversample = "4x";
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 80;
+  filter.Q.value = 15;
+
+  const g = audioCtx.createGain();
+  g.gain.value = 1.2;
+
+  oscs.forEach((osc) => {
+    osc.connect(preGain);
+  });
+
+  preGain.connect(distortion);
+  distortion.connect(filter);
+  filter.connect(g);
+  g.connect(drumGain);
+
+  oscs.forEach((osc) => {
+    osc.start(time);
+    osc.stop(time + duration);
+  });
+}
+
+function kalimba(freq, time) {
+  const detune = (Math.random() - 0.5) * 4;
+  const ratio = 2.9 + Math.random() * 0.3;
+
+  const carrier = audioCtx.createOscillator();
+  carrier.type = "sine";
+  carrier.frequency.value = freq;
+  carrier.detune.value = detune;
+
+  const modulator = audioCtx.createOscillator();
+  modulator.type = "sine";
+  modulator.frequency.value = freq * ratio;
+
+  const modIndex = audioCtx.createGain();
+  modIndex.gain.setValueAtTime(freq * 2.8, time);
+  modIndex.gain.exponentialRampToValueAtTime(freq * 0.3, time + 0.4);
+  modIndex.gain.exponentialRampToValueAtTime(0.01, time + 1.2);
+
+  modulator.connect(modIndex);
+  modIndex.connect(carrier.frequency);
+
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(7000, time);
+  filter.frequency.exponentialRampToValueAtTime(3000, time + 1);
+  filter.Q.value = 1;
+
+  const noise = audioCtx.createBufferSource();
+  const noiseBuf = audioCtx.createBuffer(
+    1,
+    audioCtx.sampleRate * 0.005,
+    audioCtx.sampleRate
+  );
+  const noiseData = noiseBuf.getChannelData(0);
+  for (let i = 0; i < noiseData.length; i++) {
+    noiseData[i] = (Math.random() * 2 - 1) * 0.1;
+  }
+  noise.buffer = noiseBuf;
+
+  const amp = audioCtx.createGain();
+  amp.gain.setValueAtTime(0, time);
+  amp.gain.linearRampToValueAtTime(0.4, time + 0.005);
+  amp.gain.exponentialRampToValueAtTime(0.2, time + 0.05);
+  amp.gain.exponentialRampToValueAtTime(0.01, time + 1.2);
+
+  carrier.connect(filter);
+  filter.connect(amp);
+  noise.connect(amp);
+  amp.connect(drumGain);
+
+  carrier.start(time);
+  modulator.start(time);
+  noise.start(time);
+  carrier.stop(time + 1.5);
+  modulator.stop(time + 1.5);
+}
+
+function choir(freq, time, duration = 0.6) {
+  const numVoices = 4;
+  const detuneAmounts = [-8, -4, 4, 8];
+  const panPositions = [-0.4, -0.2, 0.2, 0.4];
+
+  for (let v = 0; v < numVoices; v++) {
+    const voiceDetune = detuneAmounts[v];
+    const pan = panPositions[v];
+
+    const oscs = [];
+    const oscMixer = audioCtx.createGain();
+    oscMixer.gain.value = 0.2;
+
+    for (let i = 0; i < 3; i++) {
+      const osc = audioCtx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = freq;
+      osc.detune.value = voiceDetune + (Math.random() - 0.5) * 3;
+
+      const vibratoLFO = audioCtx.createOscillator();
+      vibratoLFO.frequency.value = 5.5 + Math.random() * 0.5;
+      const vibratoGain = audioCtx.createGain();
+      vibratoGain.gain.value = 12;
+      vibratoLFO.connect(vibratoGain);
+      vibratoGain.connect(osc.detune);
+
+      const driftLFO = audioCtx.createOscillator();
+      driftLFO.frequency.value = 0.1 + Math.random() * 0.1;
+      const driftGain = audioCtx.createGain();
+      driftGain.gain.value = 3;
+      driftLFO.connect(driftGain);
+      driftGain.connect(osc.detune);
+
+      osc.connect(oscMixer);
+      oscs.push(osc);
+
+      vibratoLFO.start(time);
+      vibratoLFO.stop(time + duration);
+      driftLFO.start(time);
+      driftLFO.stop(time + duration);
+    }
+
+    const formant1 = audioCtx.createBiquadFilter();
+    formant1.type = "bandpass";
+    formant1.Q.value = 4;
+
+    const formant2 = audioCtx.createBiquadFilter();
+    formant2.type = "bandpass";
+    formant2.Q.value = 3;
+
+    const formant3 = audioCtx.createBiquadFilter();
+    formant3.type = "bandpass";
+    formant3.Q.value = 5;
+
+    const vowelMorph = duration / 3;
+    formant1.frequency.setValueAtTime(700, time);
+    formant1.frequency.linearRampToValueAtTime(400, time + vowelMorph);
+    formant1.frequency.linearRampToValueAtTime(500, time + vowelMorph * 2);
+    formant1.frequency.setValueAtTime(500, time + duration);
+
+    formant2.frequency.setValueAtTime(1200, time);
+    formant2.frequency.linearRampToValueAtTime(800, time + vowelMorph);
+    formant2.frequency.linearRampToValueAtTime(1700, time + vowelMorph * 2);
+    formant2.frequency.setValueAtTime(1700, time + duration);
+
+    formant3.frequency.setValueAtTime(2500, time);
+    formant3.frequency.linearRampToValueAtTime(2600, time + vowelMorph);
+    formant3.frequency.linearRampToValueAtTime(2500, time + vowelMorph * 2);
+    formant3.frequency.setValueAtTime(2500, time + duration);
+
+    const formantMix1 = audioCtx.createGain();
+    formantMix1.gain.value = 1.5;
+    const formantMix2 = audioCtx.createGain();
+    formantMix2.gain.value = 1.2;
+    const formantMix3 = audioCtx.createGain();
+    formantMix3.gain.value = 0.8;
+
+    const formantMixer = audioCtx.createGain();
+    formantMixer.gain.value = 1;
+
+    oscMixer.connect(formant1);
+    oscMixer.connect(formant2);
+    oscMixer.connect(formant3);
+    formant1.connect(formantMix1);
+    formant2.connect(formantMix2);
+    formant3.connect(formantMix3);
+    formantMix1.connect(formantMixer);
+    formantMix2.connect(formantMixer);
+    formantMix3.connect(formantMixer);
+
+    const breathNoise = audioCtx.createBufferSource();
+    const noiseBuf = audioCtx.createBuffer(
+      1,
+      audioCtx.sampleRate * duration,
+      audioCtx.sampleRate
+    );
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * 0.01;
+    }
+    breathNoise.buffer = noiseBuf;
+
+    const breathFilter = audioCtx.createBiquadFilter();
+    breathFilter.type = "highpass";
+    breathFilter.frequency.value = 4000;
+
+    const breathGain = audioCtx.createGain();
+    breathGain.gain.setValueAtTime(0, time);
+    breathGain.gain.linearRampToValueAtTime(0.03, time + 0.02);
+    breathGain.gain.setValueAtTime(0.03, time + duration - 0.1);
+    breathGain.gain.linearRampToValueAtTime(0.01, time + duration);
+
+    breathNoise.connect(breathFilter);
+    breathFilter.connect(breathGain);
+
+    const warmthLPF = audioCtx.createBiquadFilter();
+    warmthLPF.type = "lowpass";
+    warmthLPF.frequency.value = 8000;
+    warmthLPF.Q.value = 0.5;
+
+    const chorusDelay1 = audioCtx.createDelay();
+    chorusDelay1.delayTime.value = 0.022;
+    const chorusLFO1 = audioCtx.createOscillator();
+    chorusLFO1.frequency.value = 0.4 + v * 0.1;
+    const chorusDepth1 = audioCtx.createGain();
+    chorusDepth1.gain.value = 0.005;
+    chorusLFO1.connect(chorusDepth1);
+    chorusDepth1.connect(chorusDelay1.delayTime);
+
+    const chorusDelay2 = audioCtx.createDelay();
+    chorusDelay2.delayTime.value = 0.028;
+    const chorusLFO2 = audioCtx.createOscillator();
+    chorusLFO2.frequency.value = 0.5 + v * 0.15;
+    const chorusDepth2 = audioCtx.createGain();
+    chorusDepth2.gain.value = 0.006;
+    chorusLFO2.connect(chorusDepth2);
+    chorusDepth2.connect(chorusDelay2.delayTime);
+
+    const chorusMix = audioCtx.createGain();
+    chorusMix.gain.value = 1;
+
+    const panner = audioCtx.createStereoPanner();
+    panner.pan.value = pan;
+
+    const envelope = audioCtx.createGain();
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(1, time + 0.03);
+    envelope.gain.setValueAtTime(1, time + duration - 0.4);
+    envelope.gain.exponentialRampToValueAtTime(0.01, time + duration);
+
+    formantMixer.connect(warmthLPF);
+    breathGain.connect(warmthLPF);
+    warmthLPF.connect(chorusDelay1);
+    warmthLPF.connect(chorusDelay2);
+    warmthLPF.connect(chorusMix);
+    chorusDelay1.connect(chorusMix);
+    chorusDelay2.connect(chorusMix);
+    chorusMix.connect(panner);
+    panner.connect(envelope);
+    envelope.connect(dryGain);
+    envelope.connect(wetGain);
+
+    oscs.forEach((osc) => {
+      osc.start(time + Math.random() * 0.02);
+      osc.stop(time + duration);
+    });
+
+    breathNoise.start(time);
+    breathNoise.stop(time + duration);
+
+    chorusLFO1.start(time);
+    chorusLFO1.stop(time + duration);
+    chorusLFO2.start(time);
+    chorusLFO2.stop(time + duration);
+  }
+}
+
+function startMenuMusic() {
+  const now = audioCtx.currentTime;
+  const noteDuration = 1.5;
+  const droneFreq = 110;
+  const chantMelody = [220, 246.94, 220, 196, 220, 246.94, 277, 246.94];
+  const phraseLength = chantMelody.length * noteDuration;
+
+  if (!menuMusicStartTime) {
+    menuMusicStartTime = now;
+  }
+
+  const elapsed = now - menuMusicStartTime;
+  const loopNumber = Math.floor(elapsed / phraseLength);
+  const loopStart = menuMusicStartTime + loopNumber * phraseLength;
+  const nextLoopStart = loopStart + phraseLength;
+
+  const scheduleTime = now < loopStart + 0.1 ? loopStart : nextLoopStart;
+
+  choir(droneFreq, scheduleTime, phraseLength);
+
+  chantMelody.forEach((freq, i) => {
+    choir(freq, scheduleTime + i * noteDuration, noteDuration * 1.2);
+  });
+
+  const nextCallTime = (scheduleTime + phraseLength - now) * 1000 - 300;
+  menuMusicTimeout = setTimeout(() => {
+    startMenuMusic();
+  }, nextCallTime);
+}
+
+function stopMenuMusic() {
+  menuMusicStartTime = null;
+  if (menuMusicTimeout) {
+    clearTimeout(menuMusicTimeout);
+    menuMusicTimeout = null;
+  }
+}
+
+function scheduleDrums() {
+  let seqName = currentSequence;
+  if (currentSequence === "sequence_1" && sequencePlayCount === 3) {
+    seqName = "sequence_1_final";
+  }
+  if (currentSequence === "sequence_3" && sequencePlayCount === 3) {
+    seqName = "sequence_3_final";
+  }
+
+  const seq = sequences[seqName];
+  const now = audioCtx.currentTime;
+  const lookahead = 0.1;
+
+  for (let i = 0; i < seq.kick.length; i++) {
+    const t = now + i * stepDuration + lookahead;
+
+    if (seq.kick[i]) kickDrum(t);
+    if (seq.snare[i]) snareDrum(t);
+    if (seq.hihat[i]) hiHat(t);
+    if (seq.bass[i]) fatBass(seq.bass[i], t, stepDuration * 2);
+    if (seq.kalimba[i]) kalimba(seq.kalimba[i], t);
+    if (seq.choir && seq.choir[i]) choir(seq.choir[i], t, stepDuration * 3.5);
+  }
+
+  sequencePlayCount++;
+  const maxPlays = sequenceMaxPlays[currentSequence];
+  if (maxPlays > 0 && sequencePlayCount >= maxPlays) {
+    if (currentSequence === "sequence_0") {
+      currentSequence = "sequence_1";
+      sequencePlayCount = 0;
+      clearInterval(sequencerInterval);
+      sequencerInterval = null;
+      const newSeq = sequences[currentSequence];
+      const newPatternDuration = stepDuration * newSeq.kick.length * 1000;
+      sequencerInterval = setInterval(scheduleDrums, newPatternDuration);
+    } else if (currentSequence === "sequence_1") {
+      currentSequence = "sequence_2";
+      sequencePlayCount = 0;
+      clearInterval(sequencerInterval);
+      sequencerInterval = null;
+      const newSeq = sequences[currentSequence];
+      const newPatternDuration = stepDuration * newSeq.kick.length * 1000;
+      sequencerInterval = setInterval(scheduleDrums, newPatternDuration);
+    } else if (currentSequence === "sequence_2") {
+      currentSequence = "sequence_3";
+      sequencePlayCount = 0;
+      clearInterval(sequencerInterval);
+      sequencerInterval = null;
+      const newSeq = sequences[currentSequence];
+      const newPatternDuration = stepDuration * newSeq.kick.length * 1000;
+      sequencerInterval = setInterval(scheduleDrums, newPatternDuration);
+    } else if (currentSequence === "sequence_3") {
+      sequencePlayCount = 0;
+    }
+  }
+}
+
+function startSequencer() {
+  const now = audioCtx.currentTime;
+  // Store drone oscillators so we can stop them later
+  const drone1 = dissonantSynth(55, now + 0.1, 999999, 0, -0.7);
+  const drone2 = dissonantSynth(55, now + 0.1, 999999, 2, 0.7);
+  droneOscillators = [...drone1, ...drone2];
+
+  if (sequencerInterval) return;
+  stepDuration = 60 / bpm / 4;
+  const seq = sequences[currentSequence];
+  const patternDuration = stepDuration * seq.kick.length * 1000;
+  scheduleDrums();
+  sequencerInterval = setInterval(scheduleDrums, patternDuration);
+}
+
+function stopSequencer() {
+  if (sequencerInterval) {
+    clearInterval(sequencerInterval);
+    sequencerInterval = null;
+  }
+  
+  // Stop all drone oscillators immediately
+  const now = audioCtx.currentTime;
+  droneOscillators.forEach((osc) => {
+    try {
+      osc.stop(now);
+    } catch (e) {
+      // Oscillator may already be stopped
+    }
+  });
+  droneOscillators = [];
+  
+  currentSequence = "sequence_0";
+  sequencePlayCount = 0;
 }
 
 // =============================================================================
@@ -1736,266 +3099,4 @@ function playHighScoreSound(scene) {
     osc.start(startTime);
     osc.stop(startTime + noteDuration);
   });
-}
-
-let musicLoopCount = 0; // ← new counter
-
-function initMusic() {
-  const V = 0.15;
-  const S = 0.35;   // Use same glitchy pattern as title music
-
-  // Random glitchy computer sounds - corrupted data patterns
-  // Frequencies jump around unpredictably like system errors
-  musicPattern = [
-    // Glitch burst 1
-    [120, S * 0.3, V], [0, S * 0.1, 0], [55, S * 0.4, V], [0, S * 0.15, 0],
-    [340, S * 0.2, V], [0, S * 0.08, 0], [88, S * 0.35, V], [0, S * 0.2, 0],
-    
-    // Data corruption noise
-    [200, S * 0.25, V], [0, S * 0.12, 0], [45, S * 0.3, V], [0, S * 0.18, 0],
-    [280, S * 0.22, V], [0, S * 0.1, 0], [110, S * 0.4, V], [0, S * 0.3, 0],
-    
-    // Random high-frequency glitches
-    [500, S * 0.15, V * 0.8], [0, S * 0.08, 0], [65, S * 0.35, V], [0, S * 0.15, 0],
-    [350, S * 0.2, V], [0, S * 0.1, 0], [92, S * 0.3, V], [0, S * 0.4, 0],
-    
-    // System crash sounds
-    [150, S * 0.4, V * 1.2], [0, S * 0.2, 0], [75, S * 0.25, V], [0, S * 0.15, 0],
-    [420, S * 0.18, V], [0, S * 0.12, 0], [58, S * 0.35, V], [0, S * 0.5, 0]
-  ];
-
-  musicIndex = 0;
-  musicTimer = 0;
-  musicLoopCount = 0; // reset
-}
-
-function updateMusic(scene, dt) {
-  // Only play during active gameplay (not on title, game over, name entry, or scoreboard)
-  if (!musicPlaying || !gameStarted || gameOver || enteringName) return;
-  
-  musicTimer += dt;
-  
-  if (musicIndex < musicPattern.length) {
-    const [freq, dur, vol] = musicPattern[musicIndex];
-    
-    // Play note immediately when timer reaches duration, then move to next
-    if (musicTimer >= dur) {
-      if (freq > 0 && vol > 0) {
-        playTitleMusicNote(scene, freq, dur, vol);  // Use glitchy music for gameplay
-      }
-      
-      musicTimer -= dur; // smoother timing
-      musicIndex++;
-      
-      // Loop back to start
-      if (musicIndex >= musicPattern.length) {
-        musicIndex = 0;
-        musicLoopCount++;
-      }
-    }
-  }
-}
-
-function startMusic() {
-  if (!musicPlaying) {
-    musicPlaying = true;
-    initMusic();
-  }
-}
-
-function stopMusic() {
-  musicPlaying = false;
-  musicIndex = 0;
-  musicTimer = 0;
-}
-
-// =============================================================================
-// TITLE SCREEN MUSIC
-// =============================================================================
-function initTitleMusic() {
-  const V = 0.15;
-  const S = 0.35;   // Increased from 0.22 for slower tempo
-
-  // Random glitchy computer sounds - corrupted data patterns
-  // Frequencies jump around unpredictably like system errors
-  titleMusicPattern = [
-    // Glitch burst 1
-    [120, S * 0.3, V], [0, S * 0.1, 0], [55, S * 0.4, V], [0, S * 0.15, 0],
-    [340, S * 0.2, V], [0, S * 0.08, 0], [88, S * 0.35, V], [0, S * 0.2, 0],
-    
-    // Data corruption noise
-    [200, S * 0.25, V], [0, S * 0.12, 0], [45, S * 0.3, V], [0, S * 0.18, 0],
-    [280, S * 0.22, V], [0, S * 0.1, 0], [110, S * 0.4, V], [0, S * 0.3, 0],
-    
-    // Random high-frequency glitches
-    [500, S * 0.15, V * 0.8], [0, S * 0.08, 0], [65, S * 0.35, V], [0, S * 0.15, 0],
-    [350, S * 0.2, V], [0, S * 0.1, 0], [92, S * 0.3, V], [0, S * 0.4, 0],
-    
-    // System crash sounds
-    [150, S * 0.4, V * 1.2], [0, S * 0.2, 0], [75, S * 0.25, V], [0, S * 0.15, 0],
-    [420, S * 0.18, V], [0, S * 0.12, 0], [58, S * 0.35, V], [0, S * 0.5, 0]
-  ];
-
-  titleMusicIndex = 0;
-  titleMusicTimer = 0;
-  titleMusicLoopCount = 0;
-}
-
-
-
-function updateTitleMusic(scene, dt) {
-  if (!titleMusicPlaying) return;
-  
-  titleMusicTimer += dt;
-  
-  if (titleMusicIndex < titleMusicPattern.length) {
-    const [freq, dur, vol] = titleMusicPattern[titleMusicIndex];
-    
-    if (titleMusicTimer >= dur) {
-      if (freq > 0 && vol > 0) {
-        playTitleMusicNote(scene, freq, dur, vol);
-      }
-      
-      titleMusicTimer -= dur;
-      titleMusicIndex++;
-      
-      // Loop back to start
-      if (titleMusicIndex >= titleMusicPattern.length) {
-        titleMusicIndex = 0;
-      }
-    }
-  }
-}
-
-function playTitleMusicNote(scene, freq, dur, vol) {
-  const ctx = scene.sound.context;
-  const now = ctx.currentTime;
-  
-  if (freq === 0) return; // Skip silence
-  
-  // Create glitchy sound with random frequency variation
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  
-  // Add random pitch warble for glitch effect
-  const baseFreq = freq * (0.95 + Math.random() * 0.1); // ±5% frequency jitter
-  osc.frequency.value = baseFreq;
-  osc.type = 'square';
-  
-  // Random frequency jumps during the note for more glitchy feel
-  if (Math.random() > 0.6) {
-    const jumpTime = now + dur * (0.3 + Math.random() * 0.4);
-    osc.frequency.setValueAtTime(baseFreq, jumpTime);
-    osc.frequency.setValueAtTime(baseFreq * (0.7 + Math.random() * 0.6), jumpTime + 0.01);
-  }
-  
-  // Simple on/off envelope - instant start, exponential fade out
-  gain.gain.setValueAtTime(vol, now);
-  gain.gain.exponentialRampToValueAtTime(0.01, now + dur);
-  
-  osc.start(now);
-  osc.stop(now + dur);
-  
-  // Sometimes add random secondary glitch tone
-  if (Math.random() > 0.7) {
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    
-    const glitchFreq = freq * (0.5 + Math.random() * 2); // Wild random frequency
-    osc2.frequency.value = glitchFreq;
-    osc2.type = Math.random() > 0.5 ? 'square' : 'triangle'; // Random wave type
-    
-    const glitchDur = dur * (0.3 + Math.random() * 0.7);
-    gain2.gain.setValueAtTime(vol * 0.6, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + glitchDur);
-    
-    osc2.start(now);
-    osc2.stop(now + glitchDur);
-  }
-}
-
-function startTitleMusic() {
-  if (!titleMusicPlaying) {
-    titleMusicPlaying = true;
-    initTitleMusic(); // now it actually defines pattern
-  }
-}
-
-function stopTitleMusic() {
-  titleMusicPlaying = false;
-  titleMusicIndex = 0;
-  titleMusicTimer = 0;
-}
-
-// =============================================================================
-// SCOREBOARD MUSIC
-// =============================================================================
-function initScoreboardMusic() {
-  const V = 0.12;
-  const S = 0.8;   // Much larger spacing for random PC sounds
-
-  // Sparse random beeps - not music, just random computer sounds
-  // Like a system checking memory or random diagnostic beeps
-  scoreboardMusicPattern = [
-    [210, S * 0.4, V], [0, S * 0.5, 0],
-    [75, S * 0.3, V], [0, S * 0.6, 0],
-    [420, S * 0.35, V * 0.9], [0, S * 0.7, 0],
-    [120, S * 0.4, V], [0, S * 0.8, 0],
-    
-    [340, S * 0.25, V], [0, S * 0.9, 0],
-    [55, S * 0.45, V], [0, S * 0.5, 0],
-    [280, S * 0.3, V], [0, S * 1.0, 0],
-    [150, S * 0.35, V * 1.1], [0, S * 0.6, 0],
-    
-    [500, S * 0.2, V * 0.8], [0, S * 0.8, 0],
-    [88, S * 0.4, V], [0, S * 0.5, 0],
-    [350, S * 0.3, V], [0, S * 0.7, 0],
-    [200, S * 0.35, V], [0, S * 1.2, 0]
-  ];
-
-  scoreboardMusicIndex = 0;
-  scoreboardMusicTimer = 0;
-}
-
-function updateScoreboardMusic(scene, dt) {
-  if (!scoreboardMusicPlaying) return;
-  
-  scoreboardMusicTimer += dt;
-  
-  if (scoreboardMusicIndex < scoreboardMusicPattern.length) {
-    const [freq, dur, vol] = scoreboardMusicPattern[scoreboardMusicIndex];
-    
-    if (scoreboardMusicTimer >= dur) {
-      if (freq > 0 && vol > 0) {
-        playTitleMusicNote(scene, freq, dur, vol);
-      }
-      
-      scoreboardMusicTimer -= dur;
-      scoreboardMusicIndex++;
-      
-      // Loop back to start
-      if (scoreboardMusicIndex >= scoreboardMusicPattern.length) {
-        scoreboardMusicIndex = 0;
-      }
-    }
-  }
-}
-
-function startScoreboardMusic() {
-  if (!scoreboardMusicPlaying) {
-    scoreboardMusicPlaying = true;
-    initScoreboardMusic();
-  }
-}
-
-function stopScoreboardMusic() {
-  scoreboardMusicPlaying = false;
-  scoreboardMusicIndex = 0;
-  scoreboardMusicTimer = 0;
 }
